@@ -10,7 +10,7 @@ const VitaStore = (() => {
     isLoading: false,
     currentPage: 'landing',
     onboardingComplete: false,
-    geminiApiKey: 'YOUR_GEMINI_API_KEY'
+    geminiApiKey: (window.__VITA_ENV__ && window.__VITA_ENV__.GEMINI_API_KEY) || 'YOUR_GEMINI_API_KEY'
   };
 
   const listeners = {};
@@ -60,9 +60,11 @@ const VitaStore = (() => {
     const savedIP = localStorage.getItem('vita_esp32_ip');
     if (savedIP) state.esp32IP = savedIP;
 
-    // Muat geminiApiKey dari localStorage jika tersimpan
+    // Muat geminiApiKey: prioritas localStorage → env.js → default state
     const savedKey = localStorage.getItem('vita_gemini_key');
+    const envKey   = window.__VITA_ENV__?.GEMINI_API_KEY;
     if (savedKey) state.geminiApiKey = savedKey;
+    else if (envKey && envKey !== 'YOUR_GEMINI_API_KEY') state.geminiApiKey = envKey;
 
     // Sinkronkan esp32IP ke localStorage setiap kali berubah
     on('esp32IP', (val) => {

@@ -18,7 +18,7 @@
     authDomain:        'vita-id.firebaseapp.com',
     databaseURL:       'https://vita-id-default-rtdb.asia-southeast1.firebasedatabase.app',
     projectId:         'vita-id',
-    storageBucket:     'vita-id.appspot.com',
+    storageBucket:     'vita-id.firebasestorage.app',
     messagingSenderId: env?.FIREBASE_MESSAGING_SENDER_ID || '',
     appId:             env?.FIREBASE_APP_ID              || ''
   };
