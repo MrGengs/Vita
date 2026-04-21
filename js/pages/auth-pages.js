@@ -193,5 +193,19 @@ const AuthPages = (() => {
     });
   }
 
-  return { renderLogin, renderRegister, renderForgot, initLogin, initRegister, initForgot };
+  // Sub-objects agar VitaRouter bisa resolve 'AuthPages.Login', 'AuthPages.Register', dll
+  const Login = {
+    render: renderLogin,
+    init:   initLogin
+  };
+  const Register = {
+    render: renderRegister,
+    init:   initRegister
+  };
+  const ForgotPassword = {
+    render: renderForgot,
+    init:   initForgot
+  };
+
+  return { renderLogin, renderRegister, renderForgot, initLogin, initRegister, initForgot, Login, Register, ForgotPassword };
 })();

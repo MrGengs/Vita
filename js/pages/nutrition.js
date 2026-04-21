@@ -1,10 +1,22 @@
 // VITA — Nutrition Page
 const NutritionPage = (() => {
-  // Data demo, bisa diganti dengan data dari VitaStore
-  let todayMeals = VitaStore.get('todayMeals') || [
-    { id: 1, emoji: '🍳', name: 'Nasi Goreng + Telur', time: '07:30', type: 'Sarapan', cal: 420, prot: 15, carb: 50, fat: 12 },
-    { id: 2, emoji: '🍚', name: 'Nasi Ayam + Sayur',   time: '12:15', type: 'Makan Siang', cal: 580, prot: 25, carb: 65, fat: 18 },
-  ];
+  // Mengambil data dari VitaStore secara dinamis
+  function getMeals() {
+    let meals = VitaStore.get('todayMeals');
+    if (!meals || meals.length === 0) {
+      if (VitaStore.get('demoMode')) {
+        meals = [
+          { id: 1, emoji: '🍳', name: 'Nasi Goreng + Telur', time: '07:30', type: 'Sarapan', cal: 420, prot: 15, carb: 50, fat: 12 },
+          { id: 2, emoji: '🍚', name: 'Nasi Ayam + Sayur',   time: '12:15', type: 'Makan Siang', cal: 580, prot: 25, carb: 65, fat: 18 },
+          { id: 3, emoji: '🥤', name: 'Teh Manis + Roti',    time: '15:00', type: 'Snack', cal: 220, prot: 5, carb: 45, fat: 2 },
+          { id: 4, emoji: '🥘', name: 'Sup Tahu Tempe',      time: '18:45', type: 'Makan Malam', cal: 200, prot: 23, carb: 35, fat: 10 }
+        ];
+      } else {
+        meals = [];
+      }
+    }
+    return meals;
+  }
 
   let currentTab = 'Sarapan';
 
@@ -38,7 +50,7 @@ const NutritionPage = (() => {
 
   function renderMacroBars() {
     let tCal = 0, tProt = 0, tCarb = 0, tFat = 0;
-    todayMeals.forEach(m => {
+    getMeals().forEach(m => {
       tCal += m.cal || 0; tProt += m.prot || 0; tCarb += m.carb || 0; tFat += m.fat || 0;
     });
     const tg = { cal: 2100, prot: 105, carb: 262, fat: 70 };
@@ -92,7 +104,7 @@ const NutritionPage = (() => {
   }
 
   function renderMealList() {
-    const filtered = todayMeals.filter(m => m.type === currentTab);
+    const filtered = getMeals().filter(m => m.type === currentTab);
     if (!filtered || !filtered.length) {
       return `<div style="text-align:center;padding:24px 0;color:var(--text-light);font-size:0.875rem;">
         <div style="font-size:2rem;margin-bottom:8px;">🍽️</div>
@@ -231,7 +243,9 @@ const NutritionPage = (() => {
       emoji: '🍴'
     };
 
-    todayMeals.push(newMeal);
+    const meals = getMeals();
+    meals.push(newMeal);
+    VitaStore.set('todayMeals', meals);
     currentTab = type; // Auto-pindah ke tab tempat kita menaruhnya
     
     updateUI();
@@ -242,7 +256,8 @@ const NutritionPage = (() => {
 
   function deleteMeal(e) {
     const mealId = e.currentTarget.dataset.mealId;
-    todayMeals = todayMeals.filter(m => String(m.id) !== mealId && m.name !== mealId);
+    const meals = getMeals().filter(m => String(m.id) !== mealId && m.name !== mealId);
+    VitaStore.set('todayMeals', meals);
     updateUI();
     VitaHelpers.showToast('Makanan berhasil dihapus.', 'success');
   }

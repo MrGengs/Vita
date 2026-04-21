@@ -7,7 +7,15 @@ const VitaAuth = (() => {
 
   async function signInWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
-    return auth.signInWithPopup(provider);
+    try {
+      return await auth.signInWithPopup(provider);
+    } catch (err) {
+      console.error('[VITA] Error Google Login (COOP/Popup Blocked):', err);
+      if (typeof VitaHelpers !== 'undefined') {
+        VitaHelpers.showToast('Gagal Login dengan Google. Pastikan server lokal Anda tidak memblokir Popup (COOP) atau gunakan login Email.', 'error');
+      }
+      throw err;
+    }
   }
 
   async function createAccount(email, password, displayName) {

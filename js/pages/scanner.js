@@ -13,6 +13,10 @@ const ScannerPage = (() => {
   let scanState = 'idle'; // idle | scanning | result | saving
   let currentResult = null;
   let capturedImageUrl = null;
+  let selectedDevice = null;
+  let supabaseInterval = null;
+  let lastCaptureId = null;
+  let pendingAnalysisBlob = null;
 
   function topbar() {
     const p = VitaStore.get('profile') || {};
@@ -113,17 +117,21 @@ const ScannerPage = (() => {
 
             <div class="scanner-ip-row">
               <i data-lucide="wifi" style="width:15px;height:15px;color:var(--text-light);flex-shrink:0;"></i>
-              <input id="sc-ip-input" class="scanner-ip-input" type="text"
-                placeholder="192.168.x.x" value="${ip || ''}">
+              <select id="sc-device-select" class="scanner-ip-input" style="outline:none;background:transparent;cursor:pointer;">
+                <option value="">Memuat perangkat IoT...</option>
+              </select>
               <button class="btn btn-ghost sc-test-btn" id="sc-test-btn" style="font-size:0.78rem;padding:6px 12px;">
-                Test
+                Connect
+              </button>
+            <div id="sc-analysis-actions" style="display:none; gap:10px; margin-top:4px;">
+              <button class="btn btn-outline" id="sc-cancel-capture-btn" style="flex:0 0 auto; padding:10px 16px;">
+                <i data-lucide="x" style="width:18px;height:18px;"></i> Batal
+              </button>
+              <button class="btn btn-primary" id="sc-analyze-btn" style="flex:1;">
+                <i data-lucide="sparkles" style="width:18px;height:18px;"></i>
+                Analisis Gambar
               </button>
             </div>
-
-            <button class="btn btn-primary sc-capture-btn" id="sc-capture-btn">
-              <i data-lucide="scan-line" style="width:18px;height:18px;"></i>
-              Capture &amp; Analisis
-            </button>
           </div>
 
           <!-- Right: Result -->
@@ -229,56 +237,26 @@ const ScannerPage = (() => {
     document.getElementById('sc-save-btn')?.addEventListener('click', saveMeal);
   }
 
-  async function doCapture() {
-    if (scanState === 'scanning') return;
-    showState('loading');
-
-    const steps = ['sc-step-1','sc-step-2','sc-step-3'];
-    let si = 0;
-    const stepInterval = setInterval(() => {
-      if (si > 0) document.getElementById(steps[si-1])?.classList.remove('active');
-      if (si < steps.length) {
-        document.getElementById(steps[si])?.classList.add('active');
-        si++;
-      } else {
-        clearInterval(stepInterval);
-      }
-    }, 600);
-
-    const isDemo = VitaStore.get('demoMode');
-    if (isDemo) {
-      await new Promise(r => setTimeout(r, 2000));
-      clearInterval(stepInterval);
-      const food = DEMO_FOODS[Math.floor(Math.random() * DEMO_FOODS.length)];
+  function analyzeWithGemini(blob, stepInterval) {
+    const keys = VitaStore.get('geminiApiKeys') || [];
+    let keyIdx = VitaStore.get('geminiApiKeyIndex') || 0;
+    
+    if (!keys || keys.length === 0) {
+      if(stepInterval) clearInterval(stepInterval);
+      const food = DEMO_FOODS[0];
       showResult(food);
+      VitaHelpers.showToast('API Key Gemini belum diisi — menampilkan hasil demo', 'warning');
       return;
     }
 
-    const ip = VitaESP32.getIP();
-    if (!ip) {
-      clearInterval(stepInterval);
-      showState('idle');
-      VitaHelpers.showToast('Masukkan IP ESP32-CAM terlebih dahulu', 'error');
-      return;
-    }
-
-    try {
-      const res = await fetch(VitaESP32.getCaptureURL(ip));
-      const blob = await res.blob();
-      capturedImageUrl = URL.createObjectURL(blob);
-
-      const apiKey = VitaStore.get('geminiApiKey');
-      if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY') {
-        clearInterval(stepInterval);
-        const food = DEMO_FOODS[0];
-        showResult(food);
-        VitaHelpers.showToast('API Key Gemini belum diisi — menampilkan hasil demo', 'warning');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const b64 = e.target.result.split(',')[1];
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const b64 = e.target.result.split(',')[1];
+      let attempts = 0;
+      let success = false;
+      
+      while (attempts < keys.length && !success) {
+        const apiKey = keys[keyIdx % keys.length];
         try {
           const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method:'POST', headers:{'Content-Type':'application/json'},
@@ -289,23 +267,132 @@ const ScannerPage = (() => {
               ]}]
             })
           });
+          
+          if (aiRes.status === 429 || aiRes.status === 403) {
+             keyIdx++;
+             VitaStore.set('geminiApiKeyIndex', keyIdx);
+             attempts++;
+             continue;
+          }
+
           const data = await aiRes.json();
           const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
           const parsed = JSON.parse(text.replace(/```json?|```/g,'').trim());
-          clearInterval(stepInterval);
+          if(stepInterval) clearInterval(stepInterval);
           showResult(parsed);
-        } catch {
-          clearInterval(stepInterval);
-          showResult(DEMO_FOODS[0]);
-          VitaHelpers.showToast('Gagal menganalisis — menampilkan estimasi', 'warning');
-        }
-      };
-      reader.readAsDataURL(blob);
-    } catch {
-      clearInterval(stepInterval);
-      showState('idle');
-      VitaHelpers.showToast('Gagal terhubung ke ESP32-CAM', 'error');
+          success = true;
+        } catch { break; }
+      }
+      
+      if (!success) {
+        if(stepInterval) clearInterval(stepInterval);
+        showResult(DEMO_FOODS[0]);
+        VitaHelpers.showToast(attempts >= keys.length ? 'Semua API Key limit — menampilkan estimasi' : 'Gagal menganalisis — menampilkan estimasi', 'warning');
+      }
+    };
+    reader.readAsDataURL(blob);
+  }
+
+  function resetToStream() {
+    pendingAnalysisBlob = null;
+    document.getElementById('sc-captured-image')?.classList.add('hidden');
+    document.getElementById('sc-stream')?.classList.remove('hidden');
+    
+    const actions = document.getElementById('sc-analysis-actions');
+    if (actions) actions.style.display = 'none';
+  }
+
+  function showCapturedPreview(blob) {
+    pendingAnalysisBlob = blob;
+    showState('idle'); 
+    
+    const wrap = document.getElementById('sc-preview-wrap');
+    let capImg = document.getElementById('sc-captured-image');
+    if (!capImg) {
+      capImg = document.createElement('img');
+      capImg.id = 'sc-captured-image';
+      capImg.className = 'scanner-stream';
+      wrap.appendChild(capImg);
     }
+    capImg.src = URL.createObjectURL(blob);
+    capImg.classList.remove('hidden');
+    document.getElementById('sc-stream')?.classList.add('hidden');
+    
+    const actions = document.getElementById('sc-analysis-actions');
+    if (actions) actions.style.display = 'flex';
+  }
+
+  function startAnalysis(blob) {
+    showState('loading');
+    const steps = ['sc-step-1','sc-step-2','sc-step-3'];
+    let si = 0;
+    const stepInterval = setInterval(() => {
+      if (si > 0) document.getElementById(steps[si-1])?.classList.remove('active');
+      if (si < steps.length) { document.getElementById(steps[si])?.classList.add('active'); si++; } 
+      else { clearInterval(stepInterval); }
+    }, 600);
+
+    analyzeWithGemini(blob, stepInterval);
+  }
+
+  async function processSupabaseImage(publicUrl) {
+    try {
+      const imgRes = await fetch(publicUrl);
+      const blob = await imgRes.blob();
+      showCapturedPreview(blob);
+      VitaHelpers.showToast('Foto dari ESP32 siap dianalisis!', 'info');
+    } catch (e) {
+      VitaHelpers.showToast('Gagal memuat foto dari Supabase', 'error');
+    }
+  }
+
+  function startSupabasePolling(deviceId) {
+    if (supabaseInterval) clearInterval(supabaseInterval);
+    const SUPABASE_HOST = 'jonpztihoxuzzdjneoqv.supabase.co';
+    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvbnB6dGlob3h1enpkam5lb3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3ODI0NTksImV4cCI6MjA5MjM1ODQ1OX0.JKszK9PY_IpxEOtaRy_kuD0jJyiB4Lg40sQGOs9HvVc';
+    
+    supabaseInterval = setInterval(async () => {
+      if (scanState !== 'idle') return; 
+      try {
+        const res = await fetch(`https://${SUPABASE_HOST}/rest/v1/captures?device=eq.${deviceId}&order=id.desc&limit=1`, {
+          headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` }
+        });
+        const data = await res.json();
+        if (data && data.length > 0) {
+          const row = data[0];
+          if (lastCaptureId === null) {
+            lastCaptureId = row.id; 
+            return;
+          }
+          if (row.id !== lastCaptureId) {
+            lastCaptureId = row.id;
+            VitaHelpers.showToast('Foto IoT terdeteksi! Memproses...', 'info');
+            processSupabaseImage(row.url);
+          }
+        }
+      } catch (e) { console.warn('Supabase polling err', e); }
+    }, 3000);
+  }
+
+  function doAnalyze() {
+    if (scanState === 'scanning') return;
+
+    if (pendingAnalysisBlob) {
+      startAnalysis(pendingAnalysisBlob);
+      return;
+    }
+
+    const isDemo = VitaStore.get('demoMode');
+    if (isDemo) {
+      startAnalysis(null);
+      setTimeout(() => {
+        const food = DEMO_FOODS[Math.floor(Math.random() * DEMO_FOODS.length)];
+        showResult(food);
+      }, 2000);
+      return;
+    }
+
+    VitaHelpers.showToast('Belum ada gambar yang diambil', 'warning');
   }
 
   async function saveMeal() {
@@ -342,46 +429,134 @@ const ScannerPage = (() => {
     }
   }
 
-  function _resetScan() { showState('idle'); currentResult = null; }
+  function _resetScan() { 
+    showState('idle'); 
+    currentResult = null; 
+    resetToStream();
+  }
 
   function init() {
+    if (supabaseInterval) clearInterval(supabaseInterval);
+
     document.getElementById('sc-menu-btn')?.addEventListener('click', () => {
       document.getElementById('sidebar')?.classList.toggle('open');
       document.getElementById('sidebar-overlay')?.classList.toggle('hidden');
     });
 
-    document.getElementById('sc-capture-btn')?.addEventListener('click', doCapture);
+    document.getElementById('sc-analyze-btn')?.addEventListener('click', doAnalyze);
+    document.getElementById('sc-cancel-capture-btn')?.addEventListener('click', resetToStream);
+
+    // Fetch devices from RTDB
+    if (typeof firebase !== 'undefined' && firebase.database) {
+      firebase.database().ref('/').on('value', (snap) => {
+        const val = snap.val();
+        const select = document.getElementById('sc-device-select');
+        if (!select) return;
+        // Preserve current selection if possible
+        const currentVal = select.value;
+        let firstDevValue = null;
+        
+        select.innerHTML = '<option value="">Pilih Perangkat IoT</option>';
+        if (val) {
+          Object.keys(val).forEach(k => {
+            const dev = val[k];
+            if (dev && dev.deviceId && dev.online) {
+              const opt = document.createElement('option');
+              const valStr = JSON.stringify(dev);
+              opt.value = valStr;
+              opt.textContent = dev.deviceId;
+              select.appendChild(opt);
+              if (!firstDevValue) firstDevValue = valStr;
+            }
+          });
+        }
+        
+        if (!firstDevValue) {
+          select.innerHTML = '<option value="">Tidak ada perangkat aktif</option>';
+        } else if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+          select.value = currentVal;
+        } else if (firstDevValue) {
+          // Auto-select device pertama jika belum ada yang dipilih
+          select.value = firstDevValue;
+          selectedDevice = JSON.parse(firstDevValue);
+          connectStream(selectedDevice);
+        }
+      }, (error) => {
+        console.error('[VITA] RTDB Error:', error);
+        const select = document.getElementById('sc-device-select');
+        if (select) select.innerHTML = '<option value="">Gagal memuat perangkat</option>';
+        VitaHelpers.showToast('Gagal memuat perangkat IoT. Periksa izin Realtime Database Anda.', 'error');
+      });
+
+      async function connectStream(dev) {
+        VitaESP32.setIP(dev.ip);
+        lastCaptureId = null; // reset pada device baru
+        startSupabasePolling(dev.deviceId);
+        VitaHelpers.showToast(`Memantau perangkat ${dev.deviceId}`, 'success');
+        
+        // Auto-connect Stream
+        const btn = document.getElementById('sc-test-btn');
+        if (btn) btn.textContent = '...';
+        const ok = await VitaESP32.testConnection(dev.ip);
+        if (btn) btn.textContent = 'Connect';
+        if (ok) {
+          const errEl = document.getElementById('sc-stream-err');
+          if (errEl) {
+            errEl.classList.add('hidden');
+            const wrap = document.getElementById('sc-preview-wrap');
+            const streamUrl = dev.streamUrl;
+            if (wrap && !document.getElementById('sc-stream')) {
+              const img = document.createElement('img');
+              img.id = 'sc-stream'; img.className = 'scanner-stream';
+              img.src = streamUrl;
+              wrap.insertBefore(img, wrap.firstChild);
+            } else if (document.getElementById('sc-stream')) {
+              document.getElementById('sc-stream').src = streamUrl;
+            }
+          }
+        } else {
+          VitaHelpers.showToast('Kamera tidak dapat dijangkau', 'error');
+        }
+      }
+
+      document.getElementById('sc-device-select')?.addEventListener('change', (e) => {
+        if (!e.target.value) { 
+          selectedDevice = null; 
+          if (supabaseInterval) clearInterval(supabaseInterval);
+          return; 
+        }
+        selectedDevice = JSON.parse(e.target.value);
+        connectStream(selectedDevice);
+      });
+    }
 
     document.getElementById('sc-test-btn')?.addEventListener('click', async () => {
-      const ip = document.getElementById('sc-ip-input')?.value?.trim();
-      if (!ip) { VitaHelpers.showToast('Masukkan IP terlebih dahulu', 'error'); return; }
+      if (!selectedDevice) { VitaHelpers.showToast('Pilih perangkat IoT terlebih dahulu', 'error'); return; }
+      const ip = selectedDevice.ip;
       VitaESP32.setIP(ip);
       const btn = document.getElementById('sc-test-btn');
       btn.textContent = '...';
       const ok = await VitaESP32.testConnection(ip);
-      btn.textContent = 'Test';
+      btn.textContent = 'Connect';
       if (ok) {
         VitaHelpers.showToast('ESP32-CAM terhubung!', 'success');
         const errEl = document.getElementById('sc-stream-err');
         if (errEl) {
           errEl.classList.add('hidden');
           const wrap = document.getElementById('sc-preview-wrap');
+          const streamUrl = selectedDevice.streamUrl;
           if (wrap && !document.getElementById('sc-stream')) {
             const img = document.createElement('img');
             img.id = 'sc-stream'; img.className = 'scanner-stream';
-            img.src = `http://${ip}/stream`;
+            img.src = streamUrl;
             wrap.insertBefore(img, wrap.firstChild);
           } else if (document.getElementById('sc-stream')) {
-            document.getElementById('sc-stream').src = `http://${ip}/stream`;
+            document.getElementById('sc-stream').src = streamUrl;
           }
         }
       } else {
         VitaHelpers.showToast('ESP32-CAM tidak dapat dijangkau', 'error');
       }
-    });
-
-    document.getElementById('sc-ip-input')?.addEventListener('change', (e) => {
-      VitaESP32.setIP(e.target.value.trim());
     });
   }
 

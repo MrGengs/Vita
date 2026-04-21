@@ -90,7 +90,7 @@ const VitaCharts = (() => {
   /**
    * Radar Chart untuk visualisasi multidimensi (Digunakan di: Analisis Risiko)
    */
-  function createRadar(canvasId, labels, values, color = '#52B847') {
+  function createRadar(canvasId, labels, values, color = '#2E7FBF') {
     destroy(canvasId);
     const canvas = document.getElementById(canvasId);
     if (!canvas) return null;
@@ -101,7 +101,7 @@ const VitaCharts = (() => {
         datasets: [{
           label: 'Risiko (%)',
           data: values,
-          backgroundColor: `${color}30`,
+          backgroundColor: `${color}22`,
           borderColor: color,
           borderWidth: 2,
           pointBackgroundColor: color,
@@ -115,10 +115,10 @@ const VitaCharts = (() => {
         scales: {
           r: {
             min: 0, max: 100, beginAtZero: true,
-            grid: { color: 'rgba(255,255,255,0.12)' },
-            angleLines: { color: 'rgba(255,255,255,0.1)' },
-            ticks: { display: false, stepSize: 25 },
-            pointLabels: { color: 'rgba(255,255,255,0.8)', font: { size: 11, family: 'Inter' } }
+            grid: { color: 'rgba(0,0,0,0.08)' },
+            angleLines: { color: 'rgba(0,0,0,0.08)' },
+            ticks: { display: true, stepSize: 25, color: '#94A3B8', font: { size: 10 }, backdropColor: 'transparent' },
+            pointLabels: { color: '#475569', font: { size: 11, family: 'Inter' } }
           }
         },
         plugins: {
@@ -152,10 +152,10 @@ const VitaCharts = (() => {
       options: {
         responsive: true, maintainAspectRatio: false,
         scales: {
-          x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 11 } } },
-          y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 11 } } }
+          x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#64748B', font: { size: 11 } } },
+          y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#64748B', font: { size: 11 } } }
         },
-        plugins: { legend: { labels: { color: 'rgba(255,255,255,0.8)', font: { size: 11 }, boxWidth: 12 } } },
+        plugins: { legend: { labels: { color: '#475569', font: { size: 11 }, boxWidth: 12 } } },
         animation: { duration: 800 }
       }
     });
@@ -176,10 +176,10 @@ const VitaCharts = (() => {
       options: {
         responsive: true, maintainAspectRatio: false,
         scales: {
-          x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 11 } } },
-          y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 11 } } }
+          x: { grid: { display: false }, ticks: { color: '#64748B', font: { size: 11 } } },
+          y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#64748B', font: { size: 11 } } }
         },
-        plugins: { legend: { labels: { color: 'rgba(255,255,255,0.8)', font: { size: 11 }, boxWidth: 12 } } },
+        plugins: { legend: { labels: { color: '#475569', font: { size: 11 }, boxWidth: 12 } } },
         animation: { duration: 800 }
       }
     });

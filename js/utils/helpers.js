@@ -123,6 +123,24 @@ const VitaHelpers = (() => {
     return Math.min(100, Math.max(0, (value / total) * 100));
   }
 
+  // Menghasilkan key tanggal hari ini dalam format 'YYYY-MM-DD' untuk Firestore
+  function getTodayKey() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  // Debounce utility untuk mencegah pemanggilan fungsi berulang terlalu cepat
+  function debounce(fn, delay = 300) {
+    let timer;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), delay);
+    };
+  }
+
   return {
     showToast,
     calculateBMI,
@@ -133,6 +151,8 @@ const VitaHelpers = (() => {
     formatGrams,
     getGreeting,
     getCalorieTarget,
+    getTodayKey,
+    debounce,
     pct
   };
 })();

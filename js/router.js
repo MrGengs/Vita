@@ -5,8 +5,9 @@ const VitaRouter = (() => {
   // agar semua script halaman sudah ter-load terlebih dahulu
   const routeDefs = {
     '':           { pageKey: 'LandingPage',        auth: false },
-    'login':      { pageKey: 'AuthPages.Login',    auth: false },
-    'register':   { pageKey: 'AuthPages.Register', auth: false },
+    'login':            { pageKey: 'AuthPages.Login',           auth: false },
+    'register':         { pageKey: 'AuthPages.Register',        auth: false },
+    'forgot-password':  { pageKey: 'AuthPages.ForgotPassword',  auth: false },
     'onboarding': { pageKey: 'OnboardingPage',     auth: true  },
     'dashboard':  { pageKey: 'DashboardPage',      auth: true  },
     'scanner':    { pageKey: 'ScannerPage',        auth: true  },
@@ -17,13 +18,31 @@ const VitaRouter = (() => {
     'profile':    { pageKey: 'ProfilePage',        auth: true  }
   };
 
-  // Resolve page object dari window secara lazy (support dot-notation: 'AuthPages.Login')
+  // Resolve page object secara manual karena const tidak otomatis masuk ke window
   function resolvePage(pageKey) {
     if (!pageKey) return null;
-    return pageKey.split('.').reduce(
-      (obj, k) => (obj && typeof obj === 'object' ? obj[k] : null),
-      window
-    );
+    
+    const registry = {
+      LandingPage: typeof LandingPage !== 'undefined' ? LandingPage : null,
+      AuthPages: typeof AuthPages !== 'undefined' ? AuthPages : null,
+      OnboardingPage: typeof OnboardingPage !== 'undefined' ? OnboardingPage : null,
+      DashboardPage: typeof DashboardPage !== 'undefined' ? DashboardPage : null,
+      ScannerPage: typeof ScannerPage !== 'undefined' ? ScannerPage : null,
+      NutritionPage: typeof NutritionPage !== 'undefined' ? NutritionPage : null,
+      HistoryPage: typeof HistoryPage !== 'undefined' ? HistoryPage : null,
+      RiskPage: typeof RiskPage !== 'undefined' ? RiskPage : null,
+      ConsultantPage: typeof ConsultantPage !== 'undefined' ? ConsultantPage : null,
+      ProfilePage: typeof ProfilePage !== 'undefined' ? ProfilePage : null
+    };
+
+    const parts = pageKey.split('.');
+    let result = registry[parts[0]] || window[parts[0]];
+    
+    for (let i = 1; i < parts.length; i++) {
+      if (result == null || typeof result !== 'object') { result = null; break; }
+      result = result[parts[i]];
+    }
+    return result;
   }
 
   function navigate(path) {
