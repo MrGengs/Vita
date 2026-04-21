@@ -1,26 +1,36 @@
 // Firebase Web Config — VITA Project (vita-id)
-// IMPORTANT: Replace YOUR_API_KEY and YOUR_APP_ID from Firebase Console
-// Go to: Firebase Console → Project Settings → General → Your apps → Web app
-const firebaseConfig = {
-  apiKey: "YOUR_FIREBASE_API_KEY",
-  authDomain: "vita-id.firebaseapp.com",
-  databaseURL: "https://vita-id-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "vita-id",
-  storageBucket: "vita-id.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
+// Nilai sensitif dibaca dari js/env.js (file lokal, tidak di-commit ke git).
+// Salin js/env.example.js → js/env.js lalu isi dengan nilai dari Firebase Console.
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+(function () {
+  const env = window.__VITA_ENV__;
 
-// Service instances
-const db = firebase.firestore();
-const auth = firebase.auth();
-const storage = firebase.storage();
-const rtdb = firebase.database();
+  if (!env || env.FIREBASE_API_KEY === 'YOUR_FIREBASE_API_KEY') {
+    console.error(
+      '[VITA] ⚠️  Firebase API key belum dikonfigurasi!\n' +
+      '  → Salin js/env.example.js menjadi js/env.js\n' +
+      '  → Isi nilai dari Firebase Console → Project Settings → Your apps'
+    );
+  }
 
-// Firestore settings
-db.settings({ experimentalForceLongPolling: false });
+  const firebaseConfig = {
+    apiKey:            env?.FIREBASE_API_KEY            || '',
+    authDomain:        'vita-id.firebaseapp.com',
+    databaseURL:       'https://vita-id-default-rtdb.asia-southeast1.firebasedatabase.app',
+    projectId:         'vita-id',
+    storageBucket:     'vita-id.appspot.com',
+    messagingSenderId: env?.FIREBASE_MESSAGING_SENDER_ID || '',
+    appId:             env?.FIREBASE_APP_ID              || ''
+  };
 
-console.log('[VITA] Firebase initialized — project: vita-id');
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+
+  // Service instances (global)
+  window.db      = firebase.firestore();
+  window.auth    = firebase.auth();
+  window.storage = firebase.storage();
+  window.rtdb    = firebase.database();
+
+  console.log('[VITA] Firebase initialized — project: vita-id');
+})();
