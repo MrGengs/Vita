@@ -75,6 +75,10 @@ const VitaRouter = (() => {
     // Bersihkan semua chart agar tidak memory leak
     if (typeof VitaCharts !== 'undefined') VitaCharts.destroyAll();
 
+    // Batalkan stream ESP32 yang masih loading agar tidak ada request timeout di console
+    const streamImg = document.getElementById('sc-stream');
+    if (streamImg) streamImg.src = '';
+
     // Resolve page object secara lazy
     const page   = resolvePage(def.pageKey);
     const appDiv = document.getElementById('main-content');

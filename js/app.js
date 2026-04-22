@@ -6,6 +6,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     VitaStore.init();
   }
 
+  let isRouterInitialized = false;
+
+  const initRouterOnce = () => {
+    if (!isRouterInitialized && typeof VitaRouter !== 'undefined') {
+      isRouterInitialized = true;
+      VitaRouter.init();
+      return true;
+    }
+    return false;
+  };
+
   // 2. Pantau Perubahan Status Autentikasi User (Firebase)
   if (typeof VitaAuth !== 'undefined') {
     VitaAuth.onAuthChange(async (user) => {
@@ -19,10 +30,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             const PUBLIC_PAGES = ['', 'login', 'register', 'forgot-password'];
 
             if (profile) {
+              // Sync photoURL and email automatically if they logged in with Google and it changed
+              if ((user.photoURL && profile.photoURL !== user.photoURL) || (user.email && profile.email !== user.email)) {
+                profile.photoURL = user.photoURL || profile.photoURL;
+                profile.email = user.email || profile.email;
+                VitaFirestore.saveUserProfile(user.uid, { photoURL: profile.photoURL, email: profile.email });
+              }
+
               VitaStore.set('profile', profile);
-              _updateSidebarUser(profile);
+              if (typeof window.updateSidebarUser === 'function') window.updateSidebarUser(profile, user);
 
               if (!profile.onboardingComplete) {
+                initRouterOnce();
                 if (typeof VitaRouter !== 'undefined') VitaRouter.navigate('onboarding');
                 return;
               }
@@ -32,15 +51,20 @@ document.addEventListener('DOMContentLoaded', async () => {
               const savedRedirect  = sessionStorage.getItem('vita_redirect_after_auth');
               if (savedRedirect) {
                 sessionStorage.removeItem('vita_redirect_after_auth');
+                initRouterOnce();
                 if (typeof VitaRouter !== 'undefined') VitaRouter.navigate(savedRedirect);
                 return;
               }
               if (PUBLIC_PAGES.includes(currentHash)) {
+                initRouterOnce();
                 if (typeof VitaRouter !== 'undefined') VitaRouter.navigate('dashboard');
                 return;
               }
+
+              initRouterOnce();
             } else {
               // Profil belum ada sama sekali → onboarding
+              initRouterOnce();
               if (typeof VitaRouter !== 'undefined') VitaRouter.navigate('onboarding');
               return;
             }
@@ -49,7 +73,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (typeof VitaHelpers !== 'undefined') {
               VitaHelpers.showToast('Gagal memuat profil. Mohon periksa Firestore Security Rules Anda (Missing or insufficient permissions).', 'error');
             }
+            initRouterOnce();
           }
+        } else {
+          initRouterOnce();
         }
       } else {
         // Jangan hapus state jika sedang dalam Mode Demo
@@ -57,18 +84,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           VitaStore.set('user', null);
           VitaStore.set('profile', null);
         }
+        initRouterOnce();
       }
 
-      // Segarkan ulang rute setelah status autentikasi diketahui
-      if (typeof VitaRouter !== 'undefined') VitaRouter.handleRoute();
+      // Segarkan ulang rute setelah status autentikasi diketahui, jika router sudah ada sebelumnya
+      const justInitialized = initRouterOnce();
+      if (!justInitialized && typeof VitaRouter !== 'undefined') {
+        VitaRouter.handleRoute();
+      }
     });
-  }
-
-  // 3. Mulai Router
-  if (typeof VitaRouter !== 'undefined') {
-    VitaRouter.init();
   } else {
-    console.error('[VITA] Router gagal dimuat. Pastikan router.js ada di index.html sebelum app.js.');
+    initRouterOnce();
   }
 
   // 4. Event Listener Global: Sidebar Overlay (Tutup Sidebar klik di luar area)
@@ -112,12 +138,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // Helper: Update info user di sidebar
-function _updateSidebarUser(profile) {
+window.updateSidebarUser = function(profile, user) {
   const nameEl   = document.getElementById('sidebar-name');
   const goalEl   = document.getElementById('sidebar-goal');
   const avatarEl = document.getElementById('sidebar-avatar');
-  if (nameEl)   nameEl.textContent   = profile.name || 'Pengguna';
-  if (goalEl)   goalEl.textContent   = (profile.goals && profile.goals[0]) || 'Menjaga Kesehatan';
-  if (avatarEl && typeof VitaHelpers !== 'undefined')
-    avatarEl.textContent = VitaHelpers.getInitials(profile.name);
-}
+  if (nameEl)   nameEl.textContent   = profile?.name || user?.displayName || 'Pengguna';
+  if (goalEl)   goalEl.textContent   = (profile?.goals && profile.goals[0]) || 'Menjaga Kesehatan';
+  if (avatarEl && typeof VitaHelpers !== 'undefined') {
+    avatarEl.innerHTML = VitaHelpers.getAvatar(profile?.name || user?.displayName, profile?.photoURL || user?.photoURL);
+    avatarEl.style.padding = '0';
+    avatarEl.style.overflow = 'hidden';
+  }
+};

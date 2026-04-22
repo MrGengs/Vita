@@ -1,14 +1,7 @@
 // VITA — Scanner Page
 const ScannerPage = (() => {
 
-  const DEMO_FOODS = [
-    { name:'Nasi Goreng', confidence:94, emoji:'🍳',
-      nutrition:{ calories:285, protein:8, carbs:42, fat:10, fiber:1.5, sodium:620, sugar:3 } },
-    { name:'Ayam Goreng', confidence:91, emoji:'🍗',
-      nutrition:{ calories:260, protein:27, carbs:1,  fat:16, fiber:0,   sodium:85,  sugar:0 } },
-    { name:'Mie Goreng',  confidence:88, emoji:'🍜',
-      nutrition:{ calories:330, protein:8,  carbs:50, fat:11, fiber:2,   sodium:850, sugar:4 } },
-  ];
+
 
   let scanState = 'idle'; // idle | loading | result
   let currentResult = null;
@@ -17,6 +10,48 @@ const ScannerPage = (() => {
   let lastCaptureId = null;
   let pendingAnalysisBlob = null;
   let rtdbRef = null;
+  let lockedDeviceRef = null;
+  let hashChangeListener = null;
+  let lockHeartbeatInterval = null;
+  let timeOffset = 0;
+  let currentImageUrl = null;
+  let currentImageFilename = null;
+
+  async function lockDevice(dev) {
+    if (!dev || !dev._key) return;
+    const user = VitaStore.get('user');
+    if (!user) return;
+    try {
+      if (typeof firebase !== 'undefined' && firebase.database) {
+        const ref = firebase.database().ref('/' + dev._key);
+        const timestamp = firebase.database.ServerValue.TIMESTAMP;
+        await ref.update({ lockedBy: user.uid, lockedByEmail: user.email || 'Pengguna', lockedAt: timestamp, lastPing: timestamp });
+        ref.onDisconnect().update({ lockedBy: null, lockedByEmail: null, lockedAt: null, lastPing: null });
+        lockedDeviceRef = ref;
+        
+        if (lockHeartbeatInterval) clearInterval(lockHeartbeatInterval);
+        lockHeartbeatInterval = setInterval(() => {
+          if (lockedDeviceRef) {
+            lockedDeviceRef.update({ lastPing: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
+          }
+        }, 5000);
+      }
+    } catch(e) { console.warn("Failed to lock device", e); }
+  }
+
+  async function unlockDevice() {
+    if (lockHeartbeatInterval) {
+      clearInterval(lockHeartbeatInterval);
+      lockHeartbeatInterval = null;
+    }
+    if (lockedDeviceRef) {
+      try {
+        await lockedDeviceRef.update({ lockedBy: null, lockedByEmail: null, lockedAt: null, lastPing: null });
+        lockedDeviceRef.onDisconnect().cancel();
+      } catch(e) {}
+      lockedDeviceRef = null;
+    }
+  }
 
   function topbar() {
     const p = VitaStore.get('profile') || {};
@@ -41,7 +76,7 @@ const ScannerPage = (() => {
         <button class="vita-icon-btn" onclick="window.location.hash='dashboard'" title="Dashboard">
           <i data-lucide="layout-dashboard"></i>
         </button>
-        <div class="vita-avatar">${VitaHelpers.getInitials(p.name || 'U')}</div>
+        <div class="vita-avatar" style="padding:0; overflow:hidden;">${VitaHelpers.getAvatar(p.name || 'U', p.photoURL)}</div>
       </div>
     </div>`;
   }
@@ -63,23 +98,12 @@ const ScannerPage = (() => {
   }
 
   function render() {
-    const ip = VitaESP32.getIP();
-    const isDemo = VitaStore.get('demoMode');
     return `
     <div class="dash-bg">
       <div class="dash-orb dash-orb-1"></div>
       <div class="dash-orb dash-orb-2"></div>
       ${topbar()}
       <div class="dash-content">
-
-        ${isDemo ? `
-        <div class="demo-banner card-enter">
-          <div class="demo-banner-text">
-            <i data-lucide="info" style="width:15px;height:15px;flex-shrink:0;"></i>
-            Mode Demo — tekan Capture untuk melihat contoh analisis AI
-          </div>
-          <div class="demo-banner-actions"><a href="#register" class="demo-cta-register">Daftar</a></div>
-        </div>` : ''}
 
         <div class="scanner-grid card-enter">
 
@@ -91,7 +115,7 @@ const ScannerPage = (() => {
                 Kamera ESP32-CAM
               </span>
               <div class="scanner-live-badge" id="sc-live-badge">
-                <span class="dot dot-green" style="animation:livePulse 2s infinite;"></span> LIVE
+                <span style="width:6px;height:6px;border-radius:50%;background:#52B847;animation:livePulse 2s infinite;display:inline-block;"></span> LIVE
               </div>
             </div>
 
@@ -100,14 +124,10 @@ const ScannerPage = (() => {
                 <span class="sc-corner tl"></span><span class="sc-corner tr"></span>
                 <span class="sc-corner bl"></span><span class="sc-corner br"></span>
               </div>
-              ${ip && !isDemo
-                ? `<img id="sc-stream" src="http://${ip}/stream" class="scanner-stream"
-                     onerror="document.getElementById('sc-stream-err').classList.remove('hidden')">`
-                : ''}
-              <div id="sc-stream-err" class="${ip && !isDemo ? 'hidden' : ''} scanner-no-stream">
+              <div id="sc-stream-err" class="scanner-no-stream">
                 <i data-lucide="wifi-off" style="width:36px;height:36px;color:rgba(255,255,255,0.5);"></i>
-                <span>${isDemo ? 'Demo Mode Aktif' : 'Stream tidak tersedia'}</span>
-                <span style="font-size:0.75rem;opacity:0.6;">${isDemo ? 'Tekan Capture untuk demo' : 'Periksa IP ESP32-CAM di Profil'}</span>
+                <span id="sc-stream-err-title">Belum Ada Perangkat</span>
+                <span id="sc-stream-err-sub" style="font-size:0.75rem;opacity:0.6;">Silakan pilih perangkat IoT di bawah</span>
               </div>
               <div id="sc-scanning-overlay" class="scanner-scanning hidden">
                 <div class="scanner-scan-line"></div>
@@ -117,21 +137,21 @@ const ScannerPage = (() => {
 
             <div class="scanner-ip-row">
               <i data-lucide="wifi" style="width:15px;height:15px;color:var(--text-light);flex-shrink:0;"></i>
-              <select id="sc-device-select" class="scanner-ip-input" style="outline:none;background:transparent;cursor:pointer;">
+              <select id="sc-device-select" class="scanner-ip-input" style="outline:none;background:transparent;cursor:pointer;border:none;">
                 <option value="">Memuat perangkat IoT...</option>
               </select>
-              <button class="btn btn-ghost sc-test-btn" id="sc-test-btn" style="font-size:0.78rem;padding:6px 12px;">
+              <button class="btn btn-primary btn-sm sc-test-btn" id="sc-test-btn" style="font-size:0.75rem;padding:6px 14px;border-radius:99px;font-weight:700;">
                 Connect
               </button>
-              <div id="sc-analysis-actions" style="display:none; gap:10px; margin-top:4px; width:100%;">
-                <button class="btn btn-outline" id="sc-cancel-capture-btn" style="flex:0 0 auto; padding:10px 16px;">
-                  <i data-lucide="x" style="width:18px;height:18px;"></i> Batal
-                </button>
-                <button class="btn btn-primary" id="sc-analyze-btn" style="flex:1;">
-                  <i data-lucide="sparkles" style="width:18px;height:18px;"></i>
-                  Analisis Gambar
-                </button>
-              </div>
+            </div>
+            <div id="sc-analysis-actions" style="display:none; gap:10px; width:100%; margin-top:8px;">
+              <button class="btn btn-outline" id="sc-cancel-capture-btn" style="flex:0 0 auto; padding:10px 16px; border-radius:12px; background:white;">
+                <i data-lucide="x" style="width:18px;height:18px;"></i> Batal
+              </button>
+              <button class="btn btn-primary" id="sc-analyze-btn" style="flex:1; border-radius:12px; box-shadow: 0 4px 12px rgba(46,127,191,0.25);">
+                <i data-lucide="sparkles" style="width:18px;height:18px;"></i>
+                Analisis Gambar
+              </button>
             </div>
           </div>
 
@@ -142,7 +162,7 @@ const ScannerPage = (() => {
               <div style="font-size:3rem;margin-bottom:12px;">🔍</div>
               <h3 style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:6px;">Siap Menganalisis</h3>
               <p style="font-size:0.83rem;color:var(--text-secondary);text-align:center;line-height:1.5;">
-                Arahkan kamera ke makanan lalu tekan<br><strong>Capture &amp; Analisis</strong> untuk memulai
+                Arahkan kamera ke makanan, lalu tekan tombol capture pada <strong>ESP32-CAM</strong> Anda untuk memulai.
               </p>
               <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
                 ${['📷 Foto Langsung','🤖 Analisis AI','💾 Simpan ke Log'].map(t => `
@@ -240,55 +260,29 @@ const ScannerPage = (() => {
 
   function analyzeWithGemini(blob, stepInterval) {
     const keys = VitaStore.get('geminiApiKeys') || [];
-    let keyIdx = VitaStore.get('geminiApiKeyIndex') || 0;
-    
-    if (!keys || keys.length === 0) {
-      if(stepInterval) clearInterval(stepInterval);
-      const food = DEMO_FOODS[0];
-      showResult(food);
-      VitaHelpers.showToast('API Key Gemini belum diisi — menampilkan hasil demo', 'warning');
+    if (!keys.length) {
+      if (stepInterval) clearInterval(stepInterval);
+      showState('idle');
+      VitaHelpers.showToast('API Key Gemini belum diisi', 'error');
       return;
     }
 
     const reader = new FileReader();
     reader.onload = async (e) => {
       const b64 = e.target.result.split(',')[1];
-      let attempts = 0;
-      let success = false;
-      
-      while (attempts < keys.length && !success) {
-        const apiKey = keys[keyIdx % keys.length];
-        try {
-          const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({
-              contents:[{parts:[
-                {text:'Identifikasi makanan dalam gambar ini. Berikan nama makanan dalam Bahasa Indonesia, estimasi kandungan gizi per porsi normal dalam format JSON: {name, confidence(0-100), emoji, nutrition:{calories,protein,carbs,fat,fiber,sodium,sugar}}. Jawab HANYA dengan JSON tanpa markdown.'},
-                {inline_data:{mime_type:'image/jpeg',data:b64}}
-              ]}]
-            })
-          });
-          
-          if (aiRes.status === 429 || aiRes.status === 403) {
-             keyIdx++;
-             VitaStore.set('geminiApiKeyIndex', keyIdx);
-             attempts++;
-             continue;
-          }
-
-          const data = await aiRes.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-          const parsed = JSON.parse(text.replace(/```json?|```/g,'').trim());
-          if(stepInterval) clearInterval(stepInterval);
+      try {
+        const parsed = await VitaAI.analyzeImage(b64, 'image/jpeg');
+        if (stepInterval) clearInterval(stepInterval);
+        if (parsed && parsed.name) {
           showResult(parsed);
-          success = true;
-        } catch { break; }
-      }
-      
-      if (!success) {
-        if(stepInterval) clearInterval(stepInterval);
-        showResult(DEMO_FOODS[0]);
-        VitaHelpers.showToast(attempts >= keys.length ? 'Semua API Key limit — menampilkan estimasi' : 'Gagal menganalisis — menampilkan estimasi', 'warning');
+        } else {
+          showState('idle');
+          VitaHelpers.showToast('Gagal menganalisis gambar. Silakan coba lagi.', 'error');
+        }
+      } catch {
+        if (stepInterval) clearInterval(stepInterval);
+        showState('idle');
+        VitaHelpers.showToast('Gagal menghubungi AI. Pastikan API Key valid.', 'error');
       }
     };
     reader.readAsDataURL(blob);
@@ -296,6 +290,7 @@ const ScannerPage = (() => {
 
   function resetToStream() {
     pendingAnalysisBlob = null;
+    currentImageUrl = null;
     document.getElementById('sc-captured-image')?.classList.add('hidden');
     document.getElementById('sc-stream')?.classList.remove('hidden');
     
@@ -367,6 +362,24 @@ const ScannerPage = (() => {
           }
           if (row.id !== lastCaptureId) {
             lastCaptureId = row.id;
+            currentImageUrl = row.url || null;
+            currentImageFilename = row.path || null;
+
+            // Tag capture dengan user UID agar terisolasi per-pengguna di Supabase
+            const activeUser = VitaStore.get('user');
+            if (activeUser) {
+              fetch(`https://${SUPABASE_HOST}/rest/v1/captures?id=eq.${row.id}`, {
+                method: 'PATCH',
+                headers: {
+                  'apikey': SUPABASE_ANON,
+                  'Authorization': `Bearer ${SUPABASE_ANON}`,
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({ user_uid: activeUser.uid })
+              }).catch(() => {});
+            }
+
             VitaHelpers.showToast('Foto IoT terdeteksi! Memproses...', 'info');
             processSupabaseImage(row.url);
           }
@@ -383,23 +396,6 @@ const ScannerPage = (() => {
       return;
     }
 
-    const isDemo = VitaStore.get('demoMode');
-    if (isDemo) {
-      showState('loading');
-      const steps = ['sc-step-1', 'sc-step-2', 'sc-step-3'];
-      let si = 0;
-      const stepInterval = setInterval(() => {
-        if (si > 0) document.getElementById(steps[si - 1])?.classList.remove('active');
-        if (si < steps.length) { document.getElementById(steps[si])?.classList.add('active'); si++; }
-        else clearInterval(stepInterval);
-      }, 600);
-      setTimeout(() => {
-        clearInterval(stepInterval);
-        showResult(DEMO_FOODS[Math.floor(Math.random() * DEMO_FOODS.length)]);
-      }, 2000);
-      return;
-    }
-
     VitaHelpers.showToast('Belum ada gambar yang diambil. Tunggu foto dari ESP32-CAM.', 'warning');
   }
 
@@ -409,6 +405,7 @@ const ScannerPage = (() => {
       id:    Date.now(),
       name:  result.name,
       emoji: result.emoji || '🍽️',
+      image_url: currentImageUrl,
       time:  new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
       type:  mealType,
       cal:   Math.round(n.calories || 0),
@@ -438,14 +435,6 @@ const ScannerPage = (() => {
     if (!currentResult) return;
     const mealType = document.getElementById('sc-meal-type')?.value || 'Makan Siang';
 
-    const isDemo = VitaStore.get('demoMode');
-    if (isDemo) {
-      _pushToStore(currentResult, mealType);
-      VitaHelpers.showToast(`${currentResult.name} disimpan ke ${mealType}!`, 'success');
-      setTimeout(() => { window.location.hash = 'nutrition'; }, 1200);
-      return;
-    }
-
     const user = VitaStore.get('user');
     if (!user) { VitaHelpers.showToast('Login diperlukan', 'error'); return; }
 
@@ -460,6 +449,9 @@ const ScannerPage = (() => {
       mealType,
       timestamp: new Date().toISOString(),
       source: 'esp32-cam',
+      device_id: selectedDevice?.deviceId || null,
+      image_url: currentImageUrl || null,
+      image_filename: currentImageFilename || null,
       foods: [{ name: currentResult.name, portion: 1, nutrition: currentResult.nutrition }],
       totalNutrition: currentResult.nutrition,
     };
@@ -487,10 +479,27 @@ const ScannerPage = (() => {
 
   function init() {
     if (supabaseInterval) clearInterval(supabaseInterval);
-    // Detach previous RTDB listener jika ada (cegah listener berganda saat navigasi ulang)
     if (rtdbRef) { rtdbRef.off('value'); rtdbRef = null; }
+    
+    if (hashChangeListener) {
+      window.removeEventListener('hashchange', hashChangeListener);
+    }
+    hashChangeListener = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (hash !== 'scanner') {
+        unlockDevice();
+        if (rtdbRef) { rtdbRef.off('value'); rtdbRef = null; }
+        if (supabaseInterval) clearInterval(supabaseInterval);
+        window.removeEventListener('hashchange', hashChangeListener);
+        hashChangeListener = null;
+      }
+    };
+    window.addEventListener('hashchange', hashChangeListener);
+
     scanState = 'idle';
     pendingAnalysisBlob = null;
+    currentImageUrl = null;
+    currentImageFilename = null;
     selectedDevice = null;
     lastCaptureId = null;
 
@@ -504,6 +513,10 @@ const ScannerPage = (() => {
 
     // Fetch devices from RTDB
     if (typeof firebase !== 'undefined' && firebase.database) {
+      firebase.database().ref('.info/serverTimeOffset').once('value', snap => {
+        timeOffset = snap.val() || 0;
+      });
+
       rtdbRef = firebase.database().ref('/');
       rtdbRef.on('value', (snap) => {
         const val = snap.val();
@@ -515,15 +528,31 @@ const ScannerPage = (() => {
         
         select.innerHTML = '<option value="">Pilih Perangkat IoT</option>';
         if (val) {
+          const user = VitaStore.get('user');
+          const nowServer = Date.now() + timeOffset;
           Object.keys(val).forEach(k => {
             const dev = val[k];
             if (dev && dev.deviceId && dev.online) {
+              let isLockedByOther = false;
+              if (dev.lockedBy && dev.lockedBy !== user?.uid) {
+                if (dev.lastPing && (nowServer - dev.lastPing <= 20000)) {
+                  isLockedByOther = true;
+                }
+              }
               const opt = document.createElement('option');
-              const valStr = JSON.stringify(dev);
-              opt.value = valStr;
-              opt.textContent = dev.deviceId;
-              select.appendChild(opt);
-              if (!firstDevValue) firstDevValue = valStr;
+              if (isLockedByOther) {
+                 opt.value = "";
+                 opt.disabled = true;
+                 opt.textContent = `${dev.deviceId} (Dipakai oleh ${dev.lockedByEmail || 'pengguna lain'})`;
+                 select.appendChild(opt);
+              } else {
+                 dev._key = k; // save the RTDB key for locking
+                 const valStr = JSON.stringify(dev);
+                 opt.value = valStr;
+                 opt.textContent = dev.deviceId;
+                 select.appendChild(opt);
+                 if (!firstDevValue) firstDevValue = valStr;
+              }
             }
           });
         }
@@ -532,11 +561,6 @@ const ScannerPage = (() => {
           select.innerHTML = '<option value="">Tidak ada perangkat aktif</option>';
         } else if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
           select.value = currentVal;
-        } else if (firstDevValue) {
-          // Auto-select device pertama jika belum ada yang dipilih
-          select.value = firstDevValue;
-          selectedDevice = JSON.parse(firstDevValue);
-          connectStream(selectedDevice);
         }
       }, (error) => {
         console.error('[VITA] RTDB Error:', error);
@@ -551,35 +575,64 @@ const ScannerPage = (() => {
         startSupabasePolling(dev.deviceId);
         VitaHelpers.showToast(`Memantau perangkat ${dev.deviceId}`, 'success');
         
+        const errTitle = document.getElementById('sc-stream-err-title');
+        const errSub = document.getElementById('sc-stream-err-sub');
+        const errEl = document.getElementById('sc-stream-err');
+        
+        if (errEl) errEl.classList.remove('hidden');
+        if (errTitle) errTitle.textContent = 'Menghubungkan...';
+        if (errSub) errSub.textContent = `Menyambungkan ke ${dev.deviceId}`;
+
         // Auto-connect Stream
         const btn = document.getElementById('sc-test-btn');
         if (btn) btn.textContent = '...';
         const ok = await VitaESP32.testConnection(dev.ip);
         if (btn) btn.textContent = 'Connect';
         if (ok) {
-          const errEl = document.getElementById('sc-stream-err');
-          if (errEl) {
-            errEl.classList.add('hidden');
-            const wrap = document.getElementById('sc-preview-wrap');
-            const streamUrl = dev.streamUrl;
-            if (wrap && !document.getElementById('sc-stream')) {
-              const img = document.createElement('img');
-              img.id = 'sc-stream'; img.className = 'scanner-stream';
-              img.src = streamUrl;
-              wrap.insertBefore(img, wrap.firstChild);
-            } else if (document.getElementById('sc-stream')) {
-              document.getElementById('sc-stream').src = streamUrl;
-            }
+          lockDevice(dev);
+          if (errEl) errEl.classList.add('hidden');
+          const wrap = document.getElementById('sc-preview-wrap');
+          const streamUrl = dev.streamUrl;
+          if (wrap && !document.getElementById('sc-stream')) {
+            const img = document.createElement('img');
+            img.id = 'sc-stream'; img.className = 'scanner-stream';
+            img.onload = function() { errEl?.classList.add('hidden'); this.classList.remove('hidden'); };
+            img.onerror = function() { 
+              if (errEl) { errEl.classList.remove('hidden'); if(errTitle) errTitle.textContent = 'Stream terputus'; if(errSub) errSub.textContent = `Koneksi video ke ${dev.deviceId} terputus`; }
+              this.classList.add('hidden'); 
+            };
+            img.src = streamUrl;
+            wrap.insertBefore(img, wrap.firstChild);
+          } else if (document.getElementById('sc-stream')) {
+            const img = document.getElementById('sc-stream');
+            img.onload = function() { errEl?.classList.add('hidden'); this.classList.remove('hidden'); };
+            img.onerror = function() { 
+              if (errEl) { errEl.classList.remove('hidden'); if(errTitle) errTitle.textContent = 'Stream terputus'; if(errSub) errSub.textContent = `Koneksi video ke ${dev.deviceId} terputus`; }
+              this.classList.add('hidden'); 
+            };
+            img.src = streamUrl;
+            img.classList.remove('hidden');
           }
         } else {
+          if (errTitle) errTitle.textContent = 'Gagal Terhubung';
+          if (errSub) errSub.textContent = `Perangkat ${dev.deviceId} tidak dapat dijangkau`;
           VitaHelpers.showToast('Kamera tidak dapat dijangkau', 'error');
         }
       }
 
-      document.getElementById('sc-device-select')?.addEventListener('change', (e) => {
+      document.getElementById('sc-device-select')?.addEventListener('change', async (e) => {
+        await unlockDevice();
         if (!e.target.value) { 
           selectedDevice = null; 
           if (supabaseInterval) clearInterval(supabaseInterval);
+          const errEl = document.getElementById('sc-stream-err');
+          const errTitle = document.getElementById('sc-stream-err-title');
+          const errSub = document.getElementById('sc-stream-err-sub');
+          if (errEl) errEl.classList.remove('hidden');
+          if (errTitle) errTitle.textContent = 'Belum Ada Perangkat';
+          if (errSub) errSub.textContent = 'Silakan pilih perangkat IoT di bawah';
+          const streamImg = document.getElementById('sc-stream');
+          if (streamImg) streamImg.src = '';
           return; 
         }
         selectedDevice = JSON.parse(e.target.value);
@@ -597,6 +650,7 @@ const ScannerPage = (() => {
       btn.textContent = 'Connect';
       if (ok) {
         VitaHelpers.showToast('ESP32-CAM terhubung!', 'success');
+        lockDevice(selectedDevice);
         const errEl = document.getElementById('sc-stream-err');
         if (errEl) {
           errEl.classList.add('hidden');
@@ -605,10 +659,16 @@ const ScannerPage = (() => {
           if (wrap && !document.getElementById('sc-stream')) {
             const img = document.createElement('img');
             img.id = 'sc-stream'; img.className = 'scanner-stream';
+            img.onload = function() { document.getElementById('sc-stream-err')?.classList.add('hidden'); this.classList.remove('hidden'); };
+            img.onerror = function() { document.getElementById('sc-stream-err')?.classList.remove('hidden'); this.classList.add('hidden'); };
             img.src = streamUrl;
             wrap.insertBefore(img, wrap.firstChild);
           } else if (document.getElementById('sc-stream')) {
-            document.getElementById('sc-stream').src = streamUrl;
+            const img = document.getElementById('sc-stream');
+            img.onload = function() { document.getElementById('sc-stream-err')?.classList.add('hidden'); this.classList.remove('hidden'); };
+            img.onerror = function() { document.getElementById('sc-stream-err')?.classList.remove('hidden'); this.classList.add('hidden'); };
+            img.src = streamUrl;
+            img.classList.remove('hidden');
           }
         }
       } else {

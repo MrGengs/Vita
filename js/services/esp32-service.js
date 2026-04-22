@@ -7,8 +7,8 @@ const VitaESP32 = (() => {
 
   async function testConnection(ip) {
     try {
-      const res = await fetch(`http://${ip}/info`, { signal: AbortSignal.timeout(3000) });
-      return res.ok;
+      await fetch(`http://${ip}/`, { mode: 'no-cors', signal: AbortSignal.timeout(3000) });
+      return true;
     } catch { return false; }
   }
 

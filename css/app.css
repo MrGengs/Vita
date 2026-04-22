@@ -723,6 +723,25 @@ p { line-height: 1.7; color: var(--text-secondary); }
 /* Bottom spacer */
 .dash-bottom-spacer { height: 80px; }
 
+/* ── 11b. Dashboard helpers ─────────────────────────────────── */
+.dash-card-title { font-size:0.9rem; font-weight:700; color:var(--text); display:flex; align-items:center; gap:6px; }
+.dash-link-btn {
+  display:block; margin-top:16px; text-align:center; font-size:0.8rem;
+  color:var(--primary); font-weight:600; padding:8px; border-radius:var(--radius);
+  background:var(--primary-bg); transition:all 0.2s;
+}
+.dash-link-btn:hover { background:var(--primary); color:white; }
+.dash-empty-meals { text-align:center; padding:24px 0; color:var(--text-light); font-size:0.875rem; }
+.meals-total-row {
+  margin-top:12px; padding-top:12px; border-top:1px solid var(--border-light);
+  display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-secondary);
+}
+.bmi-section { padding-top:14px; border-top:1px solid var(--border-light); }
+.bmi-label { font-size:0.8rem; font-weight:700; color:var(--text); margin-bottom:8px; }
+.bmi-row { display:flex; align-items:baseline; gap:8px; }
+.bmi-val { font-size:2rem; font-weight:800; font-family:var(--font-sans); color:var(--text); }
+.bmi-cat { font-size:0.85rem; font-weight:600; }
+
 /* ── 12. Scanner Page ───────────────────────────────────────── */
 .scanner-page {}
 .scanner-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
@@ -942,19 +961,31 @@ p { line-height: 1.7; color: var(--text-secondary); }
 .hist-summary-label { font-size: 0.7rem; color: var(--text-secondary); font-weight: 500; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
 .hist-summary-divider { width: 1px; height: 40px; background: var(--border-light); }
 
-/* Filter chips */
-.hist-filter-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 14px; border-bottom: 1px solid var(--border-light); }
-.hist-filter-row::-webkit-scrollbar { display: none; }
-.hist-filter-chip {
-  padding: 6px 16px; border-radius: 99px; font-size: 0.78rem; font-weight: 600;
-  background: var(--bg-light); border: 1.5px solid var(--border-light);
-  color: var(--text-secondary); cursor: pointer; white-space: nowrap; transition: all 0.2s;
+/* Filter chips — Premium Segmented Control */
+.hist-filter-row { 
+  display: flex; gap: 6px; 
+  background: var(--bg); 
+  padding: 6px; 
+  border-radius: 100px; 
+  margin-bottom: 20px;
+  border: 1px solid var(--border-light);
 }
-.hist-filter-chip:hover { border-color: var(--primary); color: var(--primary); }
-.hist-filter-chip.active { background: var(--primary); border-color: var(--primary); color: white; }
+.hist-filter-chip {
+  flex: 1; padding: 10px 0; border-radius: 99px; font-size: 0.8rem; font-weight: 600;
+  background: transparent; border: none;
+  color: var(--text-secondary); cursor: pointer; text-align: center; 
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hist-filter-chip:hover { color: var(--primary); }
+.hist-filter-chip.active { 
+  background: white; color: var(--primary-dark); 
+  box-shadow: 0 4px 16px rgba(46,127,191,0.12); 
+}
 
 /* Chart */
-.hist-chart-wrap { height: 180px; position: relative; margin-top: 14px; }
+.hist-chart-wrap { height: 220px; position: relative; margin-top: 10px; }
+#hist-chart-inner { height: 100%; width: 100%; display: block; }
+#hist-chart-inner canvas { height: 100% !important; width: 100% !important; }
 
 /* List */
 .hist-list-title {
@@ -1108,7 +1139,13 @@ p { line-height: 1.7; color: var(--text-secondary); }
 .prof-logout-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; }
 
 /* ── Consultant / Chat ──────────────────────────────────────── */
-.chat-page-wrap { display: flex; flex-direction: column; height: 100vh; overflow: hidden; background: #F8FAFC; }
+.chat-page-wrap {
+  display: flex; flex-direction: column;
+  height: 100vh;
+  padding-top: var(--header-height); /* offset topbar fixed */
+  box-sizing: border-box;
+  overflow: hidden; background: #F8FAFC;
+}
 .chat-context-bar {
   background: var(--primary); color: white; padding: 9px 20px;
   font-size: 0.75rem; display: flex; align-items: center; gap: 14px;
@@ -1173,6 +1210,23 @@ p { line-height: 1.7; color: var(--text-secondary); }
 }
 .chat-send-btn:hover { background: var(--primary-dark); transform: scale(1.05); }
 .chat-send-btn:active { transform: scale(0.95); }
+
+/* Chat responsive */
+@media (max-width: 1023px) {
+  /* Kurangi tinggi wrap sebesar bottom-nav agar input tidak tertutup */
+  .chat-page-wrap { padding-bottom: 60px; }
+  .chat-bubble-row { max-width: 92%; }
+  .chat-bubble-row.user { max-width: 82%; }
+  .chat-area { padding: 14px 12px; gap: 12px; }
+  .chat-input-area { padding: 10px 12px 12px; }
+  .chat-chips { padding-bottom: 8px; }
+}
+@media (min-width: 1024px) {
+  .chat-bubble-row { max-width: 70%; }
+  .chat-bubble-row.user { max-width: 58%; }
+  .chat-area { padding: 24px 28px; }
+  .chat-input-area { padding: 14px 28px 20px; }
+}
 
 .risk-overview-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
 .risk-card { background: white; border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
@@ -1424,27 +1478,33 @@ p { line-height: 1.7; color: var(--text-secondary); }
   .main-content.with-sidebar { margin-left: 0; }
   .topbar-menu-btn { display: flex; }
   .vita-menu-btn { display: flex !important; }
+  /* Dashboard */
   .dashboard-grid { grid-template-columns: 1fr; }
   .dash-col-4, .dash-col-6, .dash-col-8, .dash-col-12 { grid-column: span 1; }
+  .dash-stats-row { grid-template-columns: repeat(2, 1fr); }
+  .dash-main-row { grid-template-columns: 1fr; }
+  .dash-lower-row { grid-template-columns: 1fr !important; }
+  .quick-row { grid-template-columns: repeat(4, 1fr); }
+  /* Scanner */
   .scanner-layout { grid-template-columns: 1fr; }
-  .risk-overview-grid { grid-template-columns: 1fr; }
+  .scanner-grid { grid-template-columns: 1fr !important; }
+  /* Risk */
+  .risk-overview-grid { grid-template-columns: 1fr 1fr; }
+  /* Landing */
   .hero { padding: 100px 20px 60px; min-height: auto; }
   .hero-visual { display: none; }
   .landing-nav { padding: 16px 20px; }
   .features-section, .how-section, .stats-section { padding: 60px 20px; }
+  /* General */
   .page-container { padding: 16px; padding-bottom: 80px; }
-  .dash-stats-row { grid-template-columns: repeat(2, 1fr); }
-  .dash-main-row { grid-template-columns: 1fr 1fr; }
-  .quick-row { grid-template-columns: repeat(4, 1fr); }
 }
 
 @media (max-width: 640px) {
+  /* Forms */
   .form-row { grid-template-columns: 1fr; }
   .goal-grid { grid-template-columns: 1fr 1fr; }
   .auth-card { padding: 28px 20px; }
-  .quick-row { grid-template-columns: repeat(4, 1fr); }
-  .chat-message { max-width: 90%; }
-  .hero h1 { font-size: 2rem; }
+  /* Dashboard */
   .dash-stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .dash-main-row { grid-template-columns: 1fr; }
   .dash-lower-row { grid-template-columns: 1fr !important; }
@@ -1460,6 +1520,27 @@ p { line-height: 1.7; color: var(--text-secondary); }
   .dash-bottom-spacer { height: 90px; }
   .quick-btn-v { padding: 14px 8px; }
   .quick-icon-v { width: 36px; height: 36px; font-size: 1.1rem; }
+  /* Quick actions 2 baris di layar sangat kecil */
+  .quick-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  /* Scanner full width on small screens */
+  .scanner-grid { grid-template-columns: 1fr !important; }
+  .scanner-camera-card, .scanner-result-card { min-height: auto; }
+  /* Risk cards 2x2 */
+  .risk-cards-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .risk-item-card { padding: 14px 12px; }
+  .risk-item-score { font-size: 1.8rem; }
+  /* Profile */
+  .prof-stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  /* History */
+  .hist-summary-row { gap: 0; }
+  /* Nutrition hero */
+  .nutri-hero { flex-direction: column; align-items: flex-start; }
+  .nutri-macro-grid { grid-template-columns: 1fr; width: 100%; }
+  .nutri-hero-ring-wrap { flex-direction: row; width: 100%; align-items: center; gap: 16px; }
+  /* Landing */
+  .hero h1 { font-size: 2rem; }
+  .features-grid { grid-template-columns: 1fr !important; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ── Lucide icon sizing ──────────────────────────────────────── */

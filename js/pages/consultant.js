@@ -3,7 +3,7 @@ const ConsultantPage = (() => {
 
   let chatHistory = [];
 
-  function topbar(name) {
+  function topbar(p) {
     return `
     <div class="vita-topbar" style="border-bottom:none;">
       <div class="vita-topbar-left">
@@ -22,9 +22,10 @@ const ConsultantPage = (() => {
         </div>
       </div>
       <div class="vita-topbar-right">
-        <button class="vita-icon-btn" onclick="window.location.hash='dashboard'">
-          <i data-lucide="x"></i>
+        <button class="vita-icon-btn" onclick="window.location.hash='dashboard'" title="Dashboard">
+          <i data-lucide="layout-dashboard"></i>
         </button>
+        <div class="vita-avatar" style="padding:0; overflow:hidden;">${VitaHelpers.getAvatar(p.name || 'U', p.photoURL)}</div>
       </div>
     </div>`;
   }
@@ -41,7 +42,7 @@ const ConsultantPage = (() => {
 
     return `
     <div class="chat-page-wrap">
-      ${topbar(p.name || 'Pengguna')}
+      ${topbar(p)}
 
       <!-- Context Bar -->
       <div class="chat-context-bar">
@@ -142,7 +143,7 @@ const ConsultantPage = (() => {
     area.scrollTop = area.scrollHeight;
 
     try {
-      const response = await window.VitaAI.ask(chatHistory.join('\n\n'));
+      const response = await VitaAI.ask(chatHistory.join('\n\n'));
       chatHistory.push(`VITA AI: ${response}`);
       document.getElementById(loaderId)?.remove();
 

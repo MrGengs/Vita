@@ -190,6 +190,9 @@ const OnboardingPage = (() => {
     const bmi = formData.height && formData.weight ? VitaHelpers.calculateBMI(formData.weight, formData.height) : 0;
     const profile = {
       ...formData,
+      name: formData.name || user.displayName || 'Pengguna',
+      email: user.email || '',
+      photoURL: user.photoURL || '',
       bmi: parseFloat(bmi.toFixed(1)),
       onboardingComplete: true,
       createdAt: new Date().toISOString()
@@ -199,6 +202,7 @@ const OnboardingPage = (() => {
       await VitaFirestore.saveUserProfile(user.uid, profile);
       VitaStore.set('profile', profile);
       VitaStore.set('onboardingComplete', true);
+      if (typeof window.updateSidebarUser === 'function') window.updateSidebarUser(profile, user);
       VitaHelpers.showToast(`Selamat datang, ${formData.name}! 🎉`, 'success');
       setTimeout(() => VitaRouter.navigate('dashboard'), 500);
     } catch (e) { 

@@ -26,8 +26,25 @@ const VitaFirestore = (() => {
     const snap = await userRef(userId)
       .collection('meals')
       .where('dateKey', '==', dateKey)
-      .orderBy('createdAt')
       .get();
+      
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    // Sort di sisi client untuk menghindari error 'The query requires an index'
+    return docs.sort((a, b) => {
+      const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+      const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+      return timeA - timeB;
+    });
+  }
+
+  async function getMealsForDateRange(userId, startKey, endKey) {
+    const snap = await userRef(userId)
+      .collection('meals')
+      .where('dateKey', '>=', startKey)
+      .where('dateKey', '<=', endKey)
+      .get();
+      
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
 
@@ -55,6 +72,7 @@ const VitaFirestore = (() => {
     getUserProfile,
     saveMeal,
     getMealsForDate,
+    getMealsForDateRange,
     deleteMeal,
     saveRiskAssessment,
     getLatestRiskAssessment,

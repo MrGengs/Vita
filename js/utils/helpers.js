@@ -80,6 +80,13 @@ const VitaHelpers = (() => {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
 
+  function getAvatar(name, photoURL) {
+    if (photoURL && photoURL.trim() !== '') {
+      return `<img src="${photoURL}" alt="${name || 'User'}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" referrerpolicy="no-referrer">`;
+    }
+    return getInitials(name);
+  }
+
   function formatDate(dateObj, format = 'short') {
     const d = dateObj || new Date();
     if (format === 'full') {
@@ -146,6 +153,7 @@ const VitaHelpers = (() => {
     calculateBMI,
     getBMICategory,
     getInitials,
+    getAvatar,
     formatDate,
     formatNumber,
     formatGrams,
