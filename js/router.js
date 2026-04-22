@@ -15,7 +15,8 @@ const VitaRouter = (() => {
     'history':    { pageKey: 'HistoryPage',        auth: true  },
     'risk':       { pageKey: 'RiskPage',           auth: true  },
     'consultant': { pageKey: 'ConsultantPage',     auth: true  },
-    'profile':    { pageKey: 'ProfilePage',        auth: true  }
+    'profile':    { pageKey: 'ProfilePage',        auth: true  },
+    'guide':      { pageKey: 'GuidePage',          auth: true  }
   };
 
   // Resolve page object secara manual karena const tidak otomatis masuk ke window
@@ -32,7 +33,8 @@ const VitaRouter = (() => {
       HistoryPage: typeof HistoryPage !== 'undefined' ? HistoryPage : null,
       RiskPage: typeof RiskPage !== 'undefined' ? RiskPage : null,
       ConsultantPage: typeof ConsultantPage !== 'undefined' ? ConsultantPage : null,
-      ProfilePage: typeof ProfilePage !== 'undefined' ? ProfilePage : null
+      ProfilePage: typeof ProfilePage !== 'undefined' ? ProfilePage : null,
+      GuidePage:   typeof GuidePage   !== 'undefined' ? GuidePage   : null
     };
 
     const parts = pageKey.split('.');

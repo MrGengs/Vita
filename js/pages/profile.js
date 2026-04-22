@@ -141,7 +141,7 @@ const ProfilePage = (() => {
               <div style="font-size: 0.75rem; color: #ef4444; font-weight: 500; margin-top: 2px;">Manajemen sesi aplikasi</div>
             </div>
           </div>
-          <button id="profile-logout" style="width: 100%; background: white; color: #ef4444; border: 1px solid #fca5a5; border-radius: 12px; padding: 16px; font-size: 0.95rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(239,68,68,0.1);" onmouseover="this.style.background='#fef2f2'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='white'; this.style.transform='translateY(0)'">
+          <button id="profile-logout" style="width:100%;background:#ef4444;color:white;border:none;border-radius:12px;padding:16px;font-size:0.95rem;font-weight:800;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 16px rgba(239,68,68,0.35);" onmouseover="this.style.background='#dc2626';this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(239,68,68,0.45)'" onmouseout="this.style.background='#ef4444';this.style.transform='translateY(0)';this.style.boxShadow='0 4px 16px rgba(239,68,68,0.35)'">
             <i data-lucide="log-out" style="width:18px;height:18px;"></i>
             Keluar dari Akun
           </button>
