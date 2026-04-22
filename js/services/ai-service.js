@@ -16,7 +16,7 @@ const VitaAI = (() => {
     });
   }
 
-  async function ask(userMessage) {
+  async function ask(userMessage, mealContext = '') {
     const keys = VitaStore.get('geminiApiKeys') || [];
     if (!keys.length) {
       return '⚠️ Gemini API Key belum diisi. Tambahkan di file `js/env.js`.';
@@ -24,7 +24,15 @@ const VitaAI = (() => {
 
     const profile = VitaStore.get('profile') || {};
     const risk    = VitaStore.get('riskScores') || {};
-    const ctx = `Kamu adalah VITA AI, asisten nutrisi & kesehatan personal. Data pengguna: nama=${profile.name||'?'}, usia=${profile.age||'?'}, gender=${profile.gender||'?'}, BMI=${profile.bmi||'?'}. Risiko: DM=${risk.diabetes||0}%, HT=${risk.hypertension||0}%, OB=${risk.obesity||0}%, CVD=${risk.cvd||0}%. Jawab dalam Bahasa Indonesia, singkat dan ramah.`;
+
+    const mealSection = mealContext
+      ? `\n\nData asupan makanan pengguna:\n${mealContext}`
+      : '';
+
+    const ctx = `Kamu adalah VITA AI, asisten nutrisi & kesehatan personal berbasis bukti ilmiah.
+Data pengguna: nama=${profile.name||'?'}, usia=${profile.age||'?'} tahun, gender=${profile.gender||'?'}, BMI=${profile.bmi||'?'}, tinggi=${profile.height||'?'}cm, berat=${profile.weight||'?'}kg.
+Risiko metabolik: Diabetes=${risk.diabetes||0}%, Hipertensi=${risk.hypertension||0}%, Obesitas=${risk.obesity||0}%, CVD=${risk.cvd||0}%.${mealSection}
+Gunakan data di atas untuk memberikan saran yang personal dan spesifik. Jawab dalam Bahasa Indonesia, singkat, ramah, dan berbasis data pengguna.`;
 
     let keyIdx = VitaStore.get('geminiApiKeyIndex') || 0;
     const totalKeys = keys.length;

@@ -72,21 +72,47 @@ const RiskPage = (() => {
     return VitaRiskCalculator.assess(p, [todayNum]);
   }
 
+  // Hitung ulang & simpan di background (dipanggil setiap kali ada perubahan makanan)
+  async function recalcAndSave() {
+    const user = VitaStore.get('user');
+    if (!user || typeof VitaRiskCalculator === 'undefined') return;
+    try {
+      const newRisk = calculateCurrentRisk();
+      await VitaFirestore.saveRiskAssessment(user.uid, newRisk);
+      VitaStore.set('riskAssessment', newRisk);
+      VitaStore.set('riskScores', newRisk.scores);
+      console.log('[Risk] Recalc selesai (background)');
+    } catch (e) {
+      console.warn('[Risk] Background recalc gagal:', e);
+    }
+  }
+
   async function fetchRiskData() {
     const user = VitaStore.get('user');
     if (!user) return;
-    
+
+    const todayKey = VitaHelpers.getTodayKey();
+
     try {
-      let raw = await VitaFirestore.getLatestRiskAssessment(user.uid);
-      if (!raw) {
-        raw = calculateCurrentRisk();
-        await VitaFirestore.saveRiskAssessment(user.uid, raw);
-      }
-      if (raw) {
+      const raw = await VitaFirestore.getLatestRiskAssessment(user.uid);
+
+      const isStale = !raw || raw.dateKey !== todayKey;
+
+      if (isStale) {
+        // Data belum ada atau dari hari sebelumnya → hitung ulang berdasarkan data hari ini
+        console.log('[Risk] Data lama atau tidak ada, menghitung ulang untuk', todayKey);
+        const newRisk = calculateCurrentRisk();
+        await VitaFirestore.saveRiskAssessment(user.uid, newRisk);
+        VitaStore.set('riskAssessment', newRisk);
+        VitaStore.set('riskScores', newRisk.scores);
+      } else {
+        // Data sudah ada dan masih untuk hari ini, gunakan langsung
         VitaStore.set('riskAssessment', raw);
         VitaStore.set('riskScores', raw.scores);
-        if (typeof VitaRouter !== 'undefined') VitaRouter.handleRoute();
       }
+
+      // Re-render halaman dengan data terbaru
+      if (typeof VitaRouter !== 'undefined') VitaRouter.handleRoute();
     } catch (err) {
       console.error('[RiskPage] loadFromFirestore error:', err);
       VitaHelpers.showToast('Gagal memuat analisis risiko dari server', 'error');
@@ -183,7 +209,7 @@ const RiskPage = (() => {
             </div>
           </div>
           <div class="risk-radar-wrap" style="position: relative; height: 260px; display: flex; justify-content: center; align-items: center;">
-            <canvas id="risk-radar"></canvas>
+            <canvas id="risk-radar" style="display:block;"></canvas>
           </div>
         </div>
 
@@ -279,18 +305,22 @@ const RiskPage = (() => {
     }
 
     requestAnimationFrame(() => {
-      const activeData = raw || DEMO_RISK;
-      const s = activeData.scores || DEMO_RISK.scores;
-      if (window.VitaCharts) {
+      requestAnimationFrame(() => {
+        const canvas = document.getElementById('risk-radar');
+        if (!canvas) { console.warn('[Risk] canvas #risk-radar tidak ditemukan'); return; }
+        if (typeof VitaCharts === 'undefined') { console.error('[Risk] VitaCharts tidak tersedia'); return; }
+        if (typeof Chart === 'undefined') { console.error('[Risk] Chart.js belum di-load'); return; }
+        const activeData = raw || DEMO_RISK;
+        const s = activeData.scores || DEMO_RISK.scores;
         VitaCharts.createRadar(
           'risk-radar',
           ['Diabetes', 'Hipertensi', 'Obesitas', 'Jantung / CVD'],
           [s.diabetes, s.hypertension, s.obesity, s.cvd],
           '#2E7FBF'
         );
-      }
+      });
     });
   }
 
-  return { render, init };
+  return { render, init, recalcAndSave };
 })();

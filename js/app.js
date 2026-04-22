@@ -137,16 +137,66 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 });
 
+// ── Sidebar goal cycling ──────────────────────────────────────────
+let _goalInterval = null;
+let _goalIndex    = 0;
+let _goalList     = [];
+
+function _animateGoal(inner, newText) {
+  // Fade + slide ke atas → ganti teks → fade + slide masuk dari bawah
+  inner.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+  inner.style.transform  = 'translateY(-6px)';
+  inner.style.opacity    = '0';
+
+  setTimeout(() => {
+    inner.style.transition = 'none';
+    inner.style.transform  = 'translateY(6px)';
+    inner.textContent      = newText;
+    inner.getBoundingClientRect(); // force reflow
+    inner.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+    inner.style.transform  = 'translateY(0)';
+    inner.style.opacity    = '1';
+  }, 300);
+}
+
+function _startGoalCycle(goalEl, goals) {
+  if (_goalInterval) { clearInterval(_goalInterval); _goalInterval = null; }
+
+  const inner = goalEl.querySelector('.user-goal-inner');
+  if (!inner) return;
+
+  _goalList  = goals.filter(Boolean);
+  _goalIndex = 0;
+
+  // Tampilkan goal pertama langsung (tanpa animasi)
+  inner.style.transform = 'translateY(0)';
+  inner.style.opacity   = '1';
+  inner.textContent     = _goalList[0] || 'Menjaga Kesehatan';
+
+  if (_goalList.length <= 1) return; // Hanya 1 goal, tidak perlu cycling
+
+  _goalInterval = setInterval(() => {
+    _goalIndex = (_goalIndex + 1) % _goalList.length;
+    _animateGoal(inner, _goalList[_goalIndex]);
+  }, 3000);
+}
+
 // Helper: Update info user di sidebar
 window.updateSidebarUser = function(profile, user) {
   const nameEl   = document.getElementById('sidebar-name');
   const goalEl   = document.getElementById('sidebar-goal');
   const avatarEl = document.getElementById('sidebar-avatar');
-  if (nameEl)   nameEl.textContent   = profile?.name || user?.displayName || 'Pengguna';
-  if (goalEl)   goalEl.textContent   = (profile?.goals && profile.goals[0]) || 'Menjaga Kesehatan';
+
+  if (nameEl) nameEl.textContent = profile?.name || user?.displayName || 'Pengguna';
+
+  if (goalEl) {
+    const goals = (profile?.goals || []).filter(Boolean);
+    _startGoalCycle(goalEl, goals.length ? goals : ['Menjaga Kesehatan']);
+  }
+
   if (avatarEl && typeof VitaHelpers !== 'undefined') {
-    avatarEl.innerHTML = VitaHelpers.getAvatar(profile?.name || user?.displayName, profile?.photoURL || user?.photoURL);
-    avatarEl.style.padding = '0';
+    avatarEl.innerHTML  = VitaHelpers.getAvatar(profile?.name || user?.displayName, profile?.photoURL || user?.photoURL);
+    avatarEl.style.padding  = '0';
     avatarEl.style.overflow = 'hidden';
   }
 };

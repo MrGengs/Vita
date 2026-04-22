@@ -76,34 +76,52 @@ Setelah menambah kolom, struktur tabel harus seperti ini:
 
 ---
 
-## Langkah 3 — Periksa RLS (Row Level Security)
+## Langkah 3 — Fix Permission UPDATE di Supabase ⚠️ WAJIB
 
-Cek apakah RLS aktif di tabel `captures`:
-
-```sql
--- Cek status RLS
-SELECT tablename, rowsecurity
-FROM pg_tables
-WHERE tablename = 'captures';
-```
-
-### Jika RLS Nonaktif (rowsecurity = false)
-Tidak ada masalah. Frontend sudah handle isolasi via Firestore (per `userId`). Lanjut ke Langkah 4.
-
-### Jika RLS Aktif (rowsecurity = true)
-Tambahkan policy agar frontend (anon key) bisa melakukan PATCH:
+Ini adalah penyebab utama `user_uid` tetap null. Jalankan SQL berikut di **SQL Editor**:
 
 ```sql
--- Policy: allow update user_uid oleh siapa saja (anon)
--- aman karena kolom lain tidak bisa diubah
-CREATE POLICY "allow_tag_user_uid"
-ON captures
-FOR UPDATE
-USING (true)
-WITH CHECK (true);
+-- 1. Pastikan kolom ada
+ALTER TABLE captures
+ADD COLUMN IF NOT EXISTS user_uid TEXT DEFAULT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_captures_user_uid ON captures (user_uid);
+
+-- 2. Berikan hak UPDATE ke role anon
+GRANT UPDATE (user_uid) ON captures TO anon;
+
+-- 3. Hapus policy lama jika ada, lalu buat ulang (CREATE POLICY tidak mendukung IF NOT EXISTS)
+DROP POLICY IF EXISTS "anon_update_user_uid" ON captures;
+
+CREATE POLICY "anon_update_user_uid"
+ON captures FOR UPDATE TO anon
+USING (true) WITH CHECK (true);
 ```
 
-> **Catatan**: Policy di atas permisif untuk mempermudah. Jika ingin lebih ketat, batasi hanya kolom `user_uid` yang bisa diupdate. Supabase saat ini tidak mendukung column-level RLS, jadi ini sudah cukup aman karena frontend hanya PATCH field `user_uid`.
+### Cek apakah berhasil
+
+Buka **SQL Editor**, jalankan:
+
+```sql
+-- Harus menampilkan 'UPDATE' atau semua privileges
+SELECT grantee, privilege_type
+FROM information_schema.role_table_grants
+WHERE table_name = 'captures' AND grantee = 'anon';
+```
+
+Hasil yang benar: ada baris `anon | UPDATE`.
+
+### Diagnosis error dari Browser Console
+
+Setelah deploy, buka **DevTools → Console** di browser dan lihat log ketika ESP32 memotret.
+Frontend sekarang mencetak error spesifik jika PATCH gagal:
+
+| Pesan Console | Artinya | Solusi |
+|---|---|---|
+| `HTTP 403` | RLS blocking | Jalankan SQL policy di atas |
+| `HTTP 400: Column 'user_uid' does not exist` | Kolom belum ada | Jalankan `ALTER TABLE` di atas |
+| `HTTP 404` | Tabel tidak ditemukan | Cek nama tabel, pastikan `captures` |
+| Tidak ada error | PATCH berhasil ✓ | `user_uid` terisi di Supabase |
 
 ---
 

@@ -536,6 +536,9 @@ const NutritionPage = (() => {
     VitaHelpers.showToast(`${name} berhasil ditambahkan! ✓`, 'success');
     document.getElementById('add-meal-form')?.reset();
     document.getElementById('meal-type')?.value && (document.getElementById('meal-type').value = currentTab);
+
+    // Recalc risk di background tanpa mengganggu UI
+    if (typeof RiskPage !== 'undefined') RiskPage.recalcAndSave().catch(() => {});
   }
 
   async function deleteMeal(e) {
@@ -553,6 +556,9 @@ const NutritionPage = (() => {
     VitaStore.set('todayMeals', meals);
     updateUI();
     VitaHelpers.showToast('Makanan dihapus.', 'success');
+
+    // Recalc risk di background
+    if (typeof RiskPage !== 'undefined') RiskPage.recalcAndSave().catch(() => {});
   }
 
   // ── Listeners ─────────────────────────────────────────────────

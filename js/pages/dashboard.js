@@ -37,7 +37,13 @@ const DashboardPage = (() => {
     }
     return meals.map(m => `
     <div class="meal-entry-v">
-      <div class="meal-emoji-v">${m.emoji || '🍴'}</div>
+      <div class="meal-emoji-v" style="overflow:hidden;position:relative;">
+        ${m.image_url
+          ? `<img src="${m.image_url}" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit;" alt="${m.name}" referrerpolicy="no-referrer" loading="lazy"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+             <span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;position:absolute;inset:0;">${m.emoji || '🍴'}</span>`
+          : (m.emoji || '🍴')}
+      </div>
       <div class="meal-info-v">
         <div class="meal-name-v">${m.name}</div>
         <div class="meal-meta-v">${m.time} · ${m.type}</div>
@@ -59,10 +65,11 @@ const DashboardPage = (() => {
       catch {}
     }
     return {
-      id:    doc.id,
-      name:  food.name || doc.mealType || 'Makanan',
-      emoji: food.emoji || '🍽️',
-      type:  doc.mealType || 'Sarapan',
+      id:       doc.id,
+      name:     food.name || doc.mealType || 'Makanan',
+      emoji:    food.emoji || '🍽️',
+      image_url: doc.image_url || null,   // foto dari Supabase (scan AI)
+      type:     doc.mealType || 'Sarapan',
       time,
       cal:   Math.round(n.calories || 0),
       prot:  parseFloat((n.protein  || 0).toFixed(1)),

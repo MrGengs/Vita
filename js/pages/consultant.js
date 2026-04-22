@@ -1,7 +1,9 @@
 // VITA — AI Consultant Page
 const ConsultantPage = (() => {
 
-  let chatHistory = [];
+  let chatHistory  = [];
+  let mealContext  = '';
+  let contextReady = false;
 
   function topbar(p) {
     return `
@@ -52,13 +54,13 @@ const ConsultantPage = (() => {
         </div>
         <div class="chat-context-sep"></div>
         <div class="chat-context-item">
-          <i data-lucide="alert-triangle" style="width:13px;height:13px;opacity:0.75;"></i>
-          Perhatian: <strong>${riskNames[highestRisk] || '—'}</strong>
+          <i data-lucide="utensils" style="width:13px;height:13px;opacity:0.75;"></i>
+          <strong id="cons-cal-today">Memuat...</strong>
         </div>
         <div class="chat-context-sep"></div>
         <div class="chat-context-item">
-          <i data-lucide="sparkles" style="width:13px;height:13px;opacity:0.75;"></i>
-          Gemini AI
+          <i data-lucide="alert-triangle" style="width:13px;height:13px;opacity:0.75;"></i>
+          <strong>${riskNames[highestRisk] || '—'}</strong>
         </div>
       </div>
 
@@ -103,6 +105,66 @@ const ConsultantPage = (() => {
     return f;
   }
 
+  async function loadMealContext() {
+    const user   = VitaStore.get('user');
+    const isDemo = VitaStore.get('demoMode') || !user;
+
+    if (isDemo) {
+      mealContext  = 'Mode demo: estimasi hari ini 1850 kkal (nasi goreng, ayam bakar, buah-buahan).';
+      contextReady = true;
+      return;
+    }
+
+    try {
+      const todayKey = VitaHelpers.getTodayKey();
+      const [ty, tm, td] = todayKey.split('-').map(Number);
+      const yest  = new Date(ty, tm - 1, td - 1);
+      const yesterdayKey = `${yest.getFullYear()}-${String(yest.getMonth()+1).padStart(2,'0')}-${String(yest.getDate()).padStart(2,'0')}`;
+
+      const [todayMeals, yesterdayMeals] = await Promise.all([
+        VitaFirestore.getMealsForDate(user.uid, todayKey),
+        VitaFirestore.getMealsForDate(user.uid, yesterdayKey),
+      ]);
+
+      const summarize = (meals, label) => {
+        if (!meals.length) return `${label}: belum ada log makanan.`;
+        const tot = meals.reduce((a, m) => {
+          const n = m.totalNutrition || {};
+          return {
+            cal:    a.cal    + (n.calories || 0),
+            prot:   a.prot   + (n.protein  || 0),
+            carbs:  a.carbs  + (n.carbs    || 0),
+            fat:    a.fat    + (n.fat      || 0),
+            fiber:  a.fiber  + (n.fiber    || 0),
+            sodium: a.sodium + (n.sodium   || 0),
+          };
+        }, { cal:0, prot:0, carbs:0, fat:0, fiber:0, sodium:0 });
+        const list = meals.map(m => {
+          const name = m.foods?.[0]?.name || m.mealType || 'Makanan';
+          const cal  = Math.round(m.totalNutrition?.calories || 0);
+          return `${name} (${m.mealType}, ${cal} kkal)`;
+        }).join('; ');
+        return `${label}: ${list}. Total: ${Math.round(tot.cal)} kkal, protein ${tot.prot.toFixed(1)}g, karbo ${tot.carbs.toFixed(1)}g, lemak ${tot.fat.toFixed(1)}g, serat ${tot.fiber.toFixed(1)}g, sodium ${Math.round(tot.sodium)}mg.`;
+      };
+
+      mealContext = [
+        summarize(todayMeals,     'Hari ini'),
+        summarize(yesterdayMeals, 'Kemarin'),
+      ].join('\n');
+
+      // Update context bar kalori hari ini
+      const calEl = document.getElementById('cons-cal-today');
+      if (calEl) {
+        const todayTotal = todayMeals.reduce((s, m) => s + (m.totalNutrition?.calories || 0), 0);
+        calEl.textContent = `${Math.round(todayTotal)} kkal hari ini`;
+      }
+    } catch (e) {
+      console.warn('[Consultant] loadMealContext error:', e);
+      mealContext = '';
+    }
+    contextReady = true;
+  }
+
   async function send(textStr) {
     const input     = document.getElementById('chat-input');
     const area      = document.getElementById('chat-area');
@@ -143,7 +205,7 @@ const ConsultantPage = (() => {
     area.scrollTop = area.scrollHeight;
 
     try {
-      const response = await VitaAI.ask(chatHistory.join('\n\n'));
+      const response = await VitaAI.ask(chatHistory.join('\n\n'), mealContext);
       chatHistory.push(`VITA AI: ${response}`);
       document.getElementById(loaderId)?.remove();
 
@@ -167,11 +229,17 @@ const ConsultantPage = (() => {
   }
 
   function init() {
+    mealContext  = '';
+    contextReady = false;
+
     document.getElementById('cons-menu-btn')?.addEventListener('click', () => {
       document.getElementById('sidebar')?.classList.toggle('open');
       document.getElementById('sidebar-overlay')?.classList.toggle('hidden');
     });
     document.getElementById('chat-form')?.addEventListener('submit', (e) => { e.preventDefault(); send(); });
+
+    // Load data meals dari Firestore di background — tidak blokir UI
+    loadMealContext();
   }
 
   return { render, init, send };

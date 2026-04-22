@@ -53,9 +53,10 @@ const VitaFirestore = (() => {
   }
 
   async function saveRiskAssessment(userId, data) {
+    const dateKey = VitaHelpers.getTodayKey();
     return userRef(userId)
       .collection('risk_assessments')
-      .add({ ...data, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+      .add({ ...data, dateKey, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
   }
 
   async function getLatestRiskAssessment(userId) {
