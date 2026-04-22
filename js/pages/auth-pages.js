@@ -142,7 +142,7 @@ const AuthPages = (() => {
         await VitaAuth.signInWithEmail(email, password);
         VitaHelpers.showToast('Berhasil masuk!', 'success');
       } catch (err) {
-        const msgs = { 'auth/user-not-found':'Email tidak terdaftar.','auth/wrong-password':'Kata sandi salah.','auth/invalid-email':'Format email tidak valid.','auth/too-many-requests':'Terlalu banyak percobaan. Coba lagi nanti.' };
+        const msgs = { 'auth/user-not-found':'Email tidak terdaftar.','auth/wrong-password':'Kata sandi salah.','auth/invalid-credential':'Email atau kata sandi salah.','auth/invalid-email':'Format email tidak valid.','auth/too-many-requests':'Terlalu banyak percobaan. Coba lagi nanti.' };
         showError(msgs[err.code] || 'Gagal masuk. Periksa email dan kata sandi.');
         setLoading('login-submit', false);
       }

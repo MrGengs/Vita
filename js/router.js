@@ -64,6 +64,10 @@ const VitaRouter = (() => {
 
     // Auth Guard: halaman butuh login & user belum login & bukan mode demo
     if (def.auth && !user && !isDemo) {
+      // Simpan tujuan asal agar bisa di-restore setelah login/auth selesai
+      if (hash && hash !== 'login') {
+        sessionStorage.setItem('vita_redirect_after_auth', hash);
+      }
       navigate('login');
       return;
     }
@@ -100,10 +104,14 @@ const VitaRouter = (() => {
           if (el.getAttribute('href') === `#${hash}`) el.classList.add('active');
         });
 
-        // Tampilkan navigasi hanya jika sudah login / mode demo
-        const loggedIn = !!user || isDemo;
-        document.getElementById('sidebar')?.classList.toggle('hidden', !loggedIn);
-        document.getElementById('bottom-nav')?.classList.toggle('hidden', !loggedIn);
+        // Tampilkan navigasi hanya di halaman app (bukan landing/auth)
+        const PUBLIC_PAGES = ['', 'login', 'register', 'forgot-password'];
+        const isAppPage = !PUBLIC_PAGES.includes(hash);
+        const showNav = isAppPage && (!!user || isDemo);
+        document.getElementById('sidebar')?.classList.toggle('hidden', !showNav);
+        document.getElementById('bottom-nav')?.classList.toggle('hidden', !showNav);
+        // Desktop: geser konten utama ke kanan sejauh lebar sidebar
+        appDiv.classList.toggle('with-sidebar', showNav);
 
         // Transisi Fade In
         appDiv.style.opacity = '1';

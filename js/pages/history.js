@@ -1,9 +1,8 @@
 // VITA — History Page
 const HistoryPage = (() => {
 
-  // Data demo untuk 7 hari terakhir
   const DEMO_HISTORY = [
-    { date: new Date(), calories: 1420, meals: 4 },
+    { date: new Date(),                          calories: 1420, meals: 4 },
     { date: new Date(Date.now() - 1 * 86400000), calories: 1850, meals: 4 },
     { date: new Date(Date.now() - 2 * 86400000), calories: 2100, meals: 3 },
     { date: new Date(Date.now() - 3 * 86400000), calories: 1780, meals: 4 },
@@ -11,6 +10,8 @@ const HistoryPage = (() => {
     { date: new Date(Date.now() - 5 * 86400000), calories: 1920, meals: 3 },
     { date: new Date(Date.now() - 6 * 86400000), calories: 1680, meals: 4 },
   ];
+
+  const TARGET_CAL = 2100;
 
   function topbar() {
     const p = VitaStore.get('profile') || {};
@@ -40,36 +41,62 @@ const HistoryPage = (() => {
     </div>`;
   }
 
+  function renderSummaryStats() {
+    const avg = Math.round(DEMO_HISTORY.reduce((s, d) => s + d.calories, 0) / DEMO_HISTORY.length);
+    const max = Math.max(...DEMO_HISTORY.map(d => d.calories));
+    const totalMeals = DEMO_HISTORY.reduce((s, d) => s + d.meals, 0);
+    return `
+    <div class="hist-summary-row">
+      <div class="hist-summary-item">
+        <div class="hist-summary-val">${VitaHelpers.formatNumber(avg)}</div>
+        <div class="hist-summary-label">Rata-rata kkal</div>
+      </div>
+      <div class="hist-summary-divider"></div>
+      <div class="hist-summary-item">
+        <div class="hist-summary-val">${VitaHelpers.formatNumber(max)}</div>
+        <div class="hist-summary-label">Tertinggi kkal</div>
+      </div>
+      <div class="hist-summary-divider"></div>
+      <div class="hist-summary-item">
+        <div class="hist-summary-val">${totalMeals}</div>
+        <div class="hist-summary-label">Total makanan</div>
+      </div>
+    </div>`;
+  }
+
   function renderHistoryList() {
     return DEMO_HISTORY.map((day, i) => {
-      const date = day.date;
+      const date    = day.date;
       const isToday = new Date().toDateString() === date.toDateString();
       const dayName = isToday ? 'Hari Ini' : date.toLocaleDateString('id-ID', { weekday: 'long' });
       const fullDate = date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-      const isOver = day.calories > 2100;
+      const isOver  = day.calories > TARGET_CAL;
+      const pct     = Math.min(100, Math.round((day.calories / TARGET_CAL) * 100));
 
       return `
-      <div class="vita-card card-enter delay-${i}" style="padding: 16px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; transition: transform 0.2s, box-shadow 0.2s;"
-           onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)';"
-           onmouseout="this.style.transform='none'; this.style.boxShadow='var(--shadow-sm)';">
-        <div style="display:flex; align-items:center; gap:16px;">
-          <div style="width:48px; height:48px; border-radius:12px; background:var(--bg-light); color:var(--text-secondary); display:flex; flex-direction:column; align-items:center; justify-content:center; font-weight:700;">
-            <span style="font-size:0.7rem; text-transform:uppercase;">${date.toLocaleDateString('id-ID', { month: 'short' })}</span>
-            <span style="font-size:1.2rem; line-height:1;">${date.getDate()}</span>
-          </div>
-          <div>
-            <div style="font-weight:700; color:var(--text);">${dayName}</div>
-            <div style="font-size:0.8rem; color:var(--text-secondary);">${fullDate}</div>
+      <div class="hist-day-card card-enter delay-${i % 4}">
+        <div class="hist-day-date">
+          <span class="hist-day-month">${date.toLocaleDateString('id-ID', { month: 'short' })}</span>
+          <span class="hist-day-num">${date.getDate()}</span>
+        </div>
+        <div class="hist-day-body">
+          <div class="hist-day-name">${dayName}${isToday ? ' <span class="hist-today-badge">Hari ini</span>' : ''}</div>
+          <div class="hist-day-full">${fullDate}</div>
+          <div class="hist-day-bar-wrap">
+            <div class="hist-day-bar">
+              <div class="hist-day-bar-fill ${isOver ? 'over' : ''}" style="width:${pct}%;"></div>
+            </div>
+            <span class="hist-day-bar-pct ${isOver ? 'over' : ''}">${pct}%</span>
           </div>
         </div>
-        <div style="text-align:right;">
-          <div style="font-weight:800; font-size:1.1rem; color:${isOver ? 'var(--danger)' : 'var(--primary)'}; font-family:var(--font-sans);">
-            ${VitaHelpers.formatNumber(day.calories)} kkal
+        <div class="hist-day-right">
+          <div class="hist-day-cal ${isOver ? 'over' : ''}">${VitaHelpers.formatNumber(day.calories)}</div>
+          <div class="hist-day-unit">kkal</div>
+          <div class="hist-day-meals">
+            <i data-lucide="utensils" style="width:11px;height:11px;"></i> ${day.meals}x
           </div>
-          <div style="font-size:0.8rem; color:var(--text-light);">${day.meals} makanan</div>
         </div>
-      </div>
-      `;
+      </div>`;
     }).join('');
   }
 
@@ -80,31 +107,40 @@ const HistoryPage = (() => {
       <div class="dash-orb dash-orb-2"></div>
       ${topbar()}
       <div class="dash-content">
+
         <div class="vita-welcome card-enter">
           <div class="vita-welcome-text" style="margin-bottom:0;">
             <h2>Riwayat Analisis</h2>
-            <p>Pantau tren asupan kalori dan nutrisi Anda.</p>
+            <p>Tren asupan kalori &amp; nutrisi 7 hari terakhir</p>
           </div>
         </div>
 
-        <!-- Filter Chips & Chart -->
-        <div class="vita-card card-enter delay-1" style="margin-bottom:16px;">
-          <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; scrollbar-width:none;">
-            <button class="btn btn-primary" style="padding:6px 14px; font-size:0.75rem; border-radius:20px; white-space:nowrap;">7 Hari Terakhir</button>
-            <button class="btn btn-ghost" style="padding:6px 14px; font-size:0.75rem; border-radius:20px; background:var(--bg-light); color:var(--text-secondary); white-space:nowrap;">30 Hari</button>
-            <button class="btn btn-ghost" style="padding:6px 14px; font-size:0.75rem; border-radius:20px; background:var(--bg-light); color:var(--text-secondary); white-space:nowrap;">3 Bulan</button>
+        <!-- Summary Stats -->
+        <div class="vita-card card-enter delay-1">
+          ${renderSummaryStats()}
+        </div>
+
+        <!-- Filter Chips + Chart -->
+        <div class="vita-card card-enter delay-1">
+          <div class="hist-filter-row">
+            <button class="hist-filter-chip active">7 Hari</button>
+            <button class="hist-filter-chip">30 Hari</button>
+            <button class="hist-filter-chip">3 Bulan</button>
           </div>
-          <div style="height:180px; position:relative; margin-top:8px; display:flex; align-items:center; justify-content:center;">
+          <div class="hist-chart-wrap">
             <canvas id="history-chart"></canvas>
           </div>
         </div>
 
         <!-- Daily List -->
-        <div style="display:flex; flex-direction:column; gap:12px;" class="card-enter delay-2">
-          <div style="font-size:0.9rem; font-weight:700; color:var(--text); display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-            <i data-lucide="calendar-days" style="width:16px; height:16px; color:var(--primary);"></i> Log Harian
+        <div class="card-enter delay-2">
+          <div class="hist-list-title">
+            <i data-lucide="calendar-days" style="width:16px;height:16px;color:var(--primary);"></i>
+            Log Harian
           </div>
-          ${renderHistoryList()}
+          <div class="hist-day-list">
+            ${renderHistoryList()}
+          </div>
         </div>
 
         <div class="dash-bottom-spacer"></div>
@@ -119,22 +155,18 @@ const HistoryPage = (() => {
     });
 
     requestAnimationFrame(() => {
-      if (window.VitaCharts && window.VitaCharts.createLine) {
-        const revHist = [...DEMO_HISTORY].reverse();
-        const days = revHist.map(d => d.date.toLocaleDateString('id-ID', {weekday:'short'}));
-        const cals = revHist.map(d => d.calories);
-        
+      if (window.VitaCharts) {
+        const rev  = [...DEMO_HISTORY].reverse();
+        const days = rev.map(d => d.date.toLocaleDateString('id-ID', { weekday: 'short' }));
+        const cals = rev.map(d => d.calories);
         VitaCharts.createLine('history-chart', days, [{
-          label: 'Kalori (kkal)',
-          data: cals,
-          borderColor: '#2E7FBF',
-          backgroundColor: 'rgba(46,127,191,0.1)',
-          fill: true,
-          pointBackgroundColor: '#2E7FBF',
-          tension: 0.4
+          label: 'Kalori (kkal)', data: cals,
+          borderColor: '#2E7FBF', backgroundColor: 'rgba(46,127,191,0.08)',
+          fill: true, pointBackgroundColor: '#2E7FBF', tension: 0.4
         }]);
       }
     });
   }
+
   return { render, init };
 })();

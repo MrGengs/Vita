@@ -3,37 +3,36 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Fungsi bantuan untuk mengecek apakah user sudah login
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Fungsi bantuan untuk memastikan user hanya mengakses datanya sendiri
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // 1. Profil Pengguna
+    // Semua data user tersimpan di bawah users/{userId}
     match /users/{userId} {
+      // Profil utama
       allow read, write: if isOwner(userId);
+
+      // Log makanan harian — users/{userId}/meals/{mealId}
+      match /meals/{mealId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Riwayat analisis risiko — users/{userId}/risk_assessments/{assessmentId}
+      match /risk_assessments/{assessmentId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Riwayat percakapan AI — users/{userId}/ai_sessions/{sessionId}
+      match /ai_sessions/{sessionId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
-    // 2. Log Makanan Harian
-    match /meals/{userId}/logs/{mealId} {
-      allow read, write: if isOwner(userId);
-    }
-
-    // 3. Riwayat Analisis Risiko Metabolik
-    match /risk_assessments/{userId}/history/{assessmentId} {
-      allow read, write: if isOwner(userId);
-    }
-
-    // 4. Riwayat Percakapan AI Konsultan
-    match /ai_sessions/{userId}/conversations/{sessionId} {
-      allow read, write: if isOwner(userId);
-    }
-
-    // TOLAK semua akses lain secara default (Secure by default)
+    // Tolak semua akses di luar users/{userId}
     match /{document=**} {
       allow read, write: if false;
     }

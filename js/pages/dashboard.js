@@ -60,7 +60,7 @@ const DashboardPage = (() => {
     const name    = p.name || DEMO.name;
     const greeting = VitaHelpers.getGreeting();
     const streak  = p.streak || DEMO.streak;
-    const water   = p.waterToday || DEMO.water;
+    const water   = VitaStore.get('waterToday') || p.waterToday || DEMO.water;
 
     const cal  = n.calories || DEMO.calories;
     const prot = n.protein  || DEMO.protein;

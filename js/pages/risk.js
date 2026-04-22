@@ -4,17 +4,30 @@ const RiskPage = (() => {
   const DEMO_RISK = {
     scores: { diabetes: 28, hypertension: 42, obesity: 19, cvd: 33 },
     factors: [
-      { type: 'warning', text: 'Asupan sodium rata-rata harian (850mg) mendekati batas aman.' },
+      { type: 'warning', text: 'Konsumsi sodium rata-rata harian (850mg) mendekati batas aman.' },
       { type: 'warning', text: 'Rasio karbohidrat sederhana cukup tinggi (terdeteksi dari konsumsi mie).' },
-      { type: 'good', text: 'Asupan total kalori harian terkontrol dengan sangat baik.' },
-      { type: 'good', text: 'Konsumsi lemak trans terpantau aman dan sangat rendah.' }
+      { type: 'good',    text: 'Asupan total kalori harian terkontrol dengan sangat baik.' },
+      { type: 'good',    text: 'Konsumsi lemak trans terpantau aman dan sangat rendah.' },
     ],
     recommendations: [
-      'Kurangi tambahan kecap atau saus botolan pada makanan untuk menurunkan natrium.',
-      'Ganti sebagian porsi nasi putih dengan sumber karbohidrat kompleks seperti nasi merah atau umbi-umbian.',
-      'Tingkatkan asupan serat harian minimal 25g melalui sayuran hijau segar.'
-    ]
+      'Kurangi kecap dan saus botolan untuk menurunkan asupan natrium.',
+      'Ganti sebagian nasi putih dengan karbohidrat kompleks seperti nasi merah atau ubi.',
+      'Tingkatkan serat harian minimal 25g melalui sayuran hijau segar.',
+    ],
   };
+
+  const CARDS_META = [
+    { id: 'diabetes',     name: 'Diabetes T2',     icon: 'heart-pulse', topColor: '#2E7FBF', gradient: 'linear-gradient(135deg,#EFF6FF,#DBEAFE)' },
+    { id: 'hypertension', name: 'Hipertensi',       icon: 'activity',    topColor: '#EF4444', gradient: 'linear-gradient(135deg,#FEF2F2,#FEE2E2)' },
+    { id: 'obesity',      name: 'Obesitas',         icon: 'scale',       topColor: '#F59E0B', gradient: 'linear-gradient(135deg,#FFFBEB,#FEF3C7)' },
+    { id: 'cvd',          name: 'Penyakit Jantung', icon: 'heart',       topColor: '#8B5CF6', gradient: 'linear-gradient(135deg,#F5F3FF,#EDE9FE)' },
+  ];
+
+  function getLevelInfo(score) {
+    if (score < 25) return { label: 'Rendah',  color: '#52B847', bg: 'rgba(82,184,71,0.12)'   };
+    if (score < 55) return { label: 'Sedang',  color: '#F59E0B', bg: 'rgba(245,158,11,0.12)'  };
+    return             { label: 'Tinggi',  color: '#EF4444', bg: 'rgba(239,68,68,0.12)'    };
+  }
 
   function topbar(name) {
     return `
@@ -43,26 +56,13 @@ const RiskPage = (() => {
     </div>`;
   }
 
-  function getLevelInfo(score) {
-    if (score < 25) return { label: 'Rendah', color: '#52B847', bg: 'rgba(82,184,71,0.12)' };
-    if (score < 55) return { label: 'Sedang', color: '#F59E0B', bg: 'rgba(245,158,11,0.12)' };
-    return { label: 'Tinggi', color: '#EF4444', bg: 'rgba(239,68,68,0.12)' };
-  }
-
   function render() {
-    const p = VitaStore.get('profile') || {};
+    const p      = VitaStore.get('profile') || {};
     const isDemo = VitaStore.get('demoMode');
-    const rawRisk = VitaStore.get('riskAssessment') || DEMO_RISK;
-    const scores = rawRisk.scores || DEMO_RISK.scores;
-    const factors = rawRisk.factors || DEMO_RISK.factors;
-    const recs = rawRisk.recommendations || DEMO_RISK.recommendations;
-
-    const cards = [
-      { id: 'diabetes', name: 'Diabetes T2', icon: 'heart-pulse', score: scores.diabetes, topColor: '#2E7FBF' },
-      { id: 'hypertension', name: 'Hipertensi', icon: 'activity', score: scores.hypertension, topColor: '#EF4444' },
-      { id: 'obesity', name: 'Obesitas', icon: 'scale', score: scores.obesity, topColor: '#F59E0B' },
-      { id: 'cvd', name: 'Penyakit Jantung', icon: 'heart', score: scores.cvd, topColor: '#8B5CF6' }
-    ];
+    const raw    = VitaStore.get('riskAssessment') || DEMO_RISK;
+    const scores = raw.scores       || DEMO_RISK.scores;
+    const factors = raw.factors     || DEMO_RISK.factors;
+    const recs    = raw.recommendations || DEMO_RISK.recommendations;
 
     return `
     <div class="dash-bg">
@@ -79,72 +79,83 @@ const RiskPage = (() => {
           </div>
         </div>` : ''}
 
+        <!-- Page Header -->
         <div class="vita-welcome card-enter">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="risk-welcome-inner">
             <div class="vita-welcome-text" style="margin-bottom:0;">
               <h2>Analisis Risiko Metabolik</h2>
-              <p>Berdasarkan riwayat nutrisi & profil kesehatan</p>
+              <p>Berdasarkan riwayat nutrisi &amp; profil kesehatan</p>
             </div>
-            <button class="btn btn-ghost" id="btn-recalc" style="background:var(--primary-bg); color:var(--primary);">
-              <i data-lucide="refresh-cw" style="width:16px;height:16px;"></i>
+            <button class="btn-icon-sm" id="btn-recalc" title="Hitung ulang">
+              <i data-lucide="refresh-cw" style="width:15px;height:15px;"></i>
+              Hitung Ulang
             </button>
           </div>
         </div>
 
-        <!-- 4 Risk Cards Grid -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:16px;margin-bottom:24px;">
-          ${cards.map((c, i) => {
-            const lvl = getLevelInfo(c.score);
+        <!-- 4 Risk Cards -->
+        <div class="risk-cards-grid">
+          ${CARDS_META.map((c, i) => {
+            const lvl = getLevelInfo(scores[c.id]);
+            const pct = scores[c.id];
             return `
-            <div class="vita-card card-enter delay-${i+1}" style="border-top: 4px solid ${c.topColor}; padding: 18px; text-align: center;">
-              <div style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:${lvl.bg};color:${lvl.color};margin-bottom:12px;">
+            <div class="risk-item-card card-enter delay-${i+1}" style="border-top:4px solid ${c.topColor}; background:${c.gradient};">
+              <div class="risk-item-icon" style="background:${lvl.bg}; color:${lvl.color};">
                 <i data-lucide="${c.icon}" style="width:20px;height:20px;"></i>
               </div>
-              <div style="font-size:0.85rem;color:var(--text-secondary);font-weight:600;margin-bottom:4px;">${c.name}</div>
-              <div style="font-size:2rem;font-weight:800;color:var(--text);font-family:var(--font-sans);margin-bottom:8px;">
-                ${c.score}<span style="font-size:1rem;color:var(--text-light);">%</span>
+              <div class="risk-item-name">${c.name}</div>
+              <div class="risk-item-score" style="color:${c.topColor};">
+                ${pct}<span class="risk-item-pct">%</span>
               </div>
-              <div style="display:inline-block;padding:4px 12px;border-radius:99px;font-size:0.75rem;font-weight:700;background:${lvl.bg};color:${lvl.color};">
-                ${lvl.label}
+              <div class="risk-item-bar-track">
+                <div class="risk-item-bar-fill" style="width:${pct}%; background:${c.topColor};"></div>
               </div>
+              <div class="risk-level-badge" style="background:${lvl.bg}; color:${lvl.color};">${lvl.label}</div>
             </div>`;
           }).join('')}
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr;gap:16px;" class="dash-lower-row">
-          <!-- Radar Chart -->
-          <div class="vita-card card-enter delay-2" style="display:flex;flex-direction:column;min-height:300px;">
-            <div style="font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:16px;display:flex;align-items:center;gap:6px;">
-              <i data-lucide="pie-chart" style="width:16px;height:16px;color:var(--primary);"></i> Peta Sebaran Risiko
-            </div>
-            <div style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;">
-              <canvas id="risk-radar" style="max-height:260px;"></canvas>
-            </div>
+        <!-- Radar Chart -->
+        <div class="vita-card card-enter delay-2">
+          <div class="card-section-label">
+            <i data-lucide="pie-chart" style="width:15px;height:15px;color:var(--primary);"></i>
+            Peta Sebaran Risiko
           </div>
+          <div class="risk-radar-wrap">
+            <canvas id="risk-radar"></canvas>
+          </div>
+        </div>
 
-          <!-- Factors & Recommendations -->
-          <div class="vita-card card-enter delay-3">
-            <div style="font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:6px;">
-              <i data-lucide="shield-alert" style="width:16px;height:16px;color:var(--primary);"></i> Faktor Terdeteksi
-            </div>
-            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
-              ${factors.map(f => `
-                <div style="display:flex;gap:10px;align-items:flex-start;background:var(--bg-light);padding:12px;border-radius:var(--radius);">
-                  ${f.type === 'warning'
-                    ? `<i data-lucide="alert-triangle" style="width:18px;height:18px;color:#F59E0B;flex-shrink:0;"></i>`
-                    : `<i data-lucide="check-circle" style="width:18px;height:18px;color:#52B847;flex-shrink:0;"></i>`
-                  }
-                  <span style="font-size:0.83rem;color:var(--text);line-height:1.5;">${f.text}</span>
-                </div>
-              `).join('')}
-            </div>
+        <!-- Factors -->
+        <div class="vita-card card-enter delay-3">
+          <div class="card-section-label" style="margin-bottom:14px;">
+            <i data-lucide="shield-alert" style="width:15px;height:15px;color:var(--primary);"></i>
+            Faktor Terdeteksi
+          </div>
+          <div class="risk-factors-list">
+            ${factors.map(f => `
+            <div class="risk-factor-item ${f.type}">
+              <div class="risk-factor-icon">
+                <i data-lucide="${f.type === 'warning' ? 'alert-triangle' : 'check-circle'}"
+                  style="width:16px;height:16px;"></i>
+              </div>
+              <span class="risk-factor-text">${f.text}</span>
+            </div>`).join('')}
+          </div>
+        </div>
 
-            <div style="font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:6px;">
-              <i data-lucide="lightbulb" style="width:16px;height:16px;color:var(--primary);"></i> Rekomendasi VITA
-            </div>
-            <ul style="padding-left:20px;margin:0;font-size:0.83rem;color:var(--text-secondary);line-height:1.6;">
-              ${recs.map(r => `<li style="margin-bottom:8px;">${r}</li>`).join('')}
-            </ul>
+        <!-- Recommendations -->
+        <div class="vita-card card-enter delay-4">
+          <div class="card-section-label" style="margin-bottom:14px;">
+            <i data-lucide="lightbulb" style="width:15px;height:15px;color:var(--primary);"></i>
+            Rekomendasi VITA
+          </div>
+          <div class="risk-recs-list">
+            ${recs.map((r, i) => `
+            <div class="risk-rec-item">
+              <div class="risk-rec-num">${i + 1}</div>
+              <p class="risk-rec-text">${r}</p>
+            </div>`).join('')}
           </div>
         </div>
 
@@ -161,51 +172,44 @@ const RiskPage = (() => {
 
     document.getElementById('btn-recalc')?.addEventListener('click', (e) => {
       const btn = e.currentTarget;
-      btn.innerHTML = '<i data-lucide="loader-circle" style="width:16px;height:16px;animation:spin 1s linear infinite;"></i>';
-      if(typeof lucide !== 'undefined') lucide.createIcons();
-      
+      btn.innerHTML = '<i data-lucide="loader-circle" style="width:15px;height:15px;animation:spin 1s linear infinite;"></i> Menghitung...';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+
       setTimeout(() => {
         if (typeof VitaRiskCalculator !== 'undefined') {
-          const p = VitaStore.get('profile') || {};
+          const p          = VitaStore.get('profile') || {};
           const todayMeals = VitaStore.get('todayMeals') || [];
-          
-          // Agregasi nutrisi harian sebagai sampel untuk kalkulator
-          const todayNum = todayMeals.reduce((acc, m) => {
-            acc.calories += m.cal || 0; acc.carbs += m.carb || 0;
-            acc.fat += m.fat || 0; acc.fiber += m.fiber || 3; // Fallback jika data kosong
-            acc.sodium += m.sodium || 400; // Fallback sodium jika data kosong
+          const todayNum   = todayMeals.reduce((acc, m) => {
+            acc.calories += m.cal    || 0;
+            acc.carbs    += m.carb   || 0;
+            acc.fat      += m.fat    || 0;
+            acc.fiber    += m.fiber  || 3;
+            acc.sodium   += m.sodium || 400;
             return acc;
           }, { calories: 0, carbs: 0, fat: 0, fiber: 0, sodium: 0 });
 
           const newRisk = VitaRiskCalculator.assess(p, [todayNum]);
           VitaStore.set('riskAssessment', newRisk);
-          VitaStore.set('riskScores', newRisk.scores); // Sync otomatis ke UI Dashboard utama
-          
-          if (typeof VitaRouter !== 'undefined') VitaRouter.handleRoute(); // Re-render instan UI Halaman
-          VitaHelpers.showToast('Analisis risiko berhasil diperbarui!', 'success');
+          VitaStore.set('riskScores', newRisk.scores);
+          if (typeof VitaRouter !== 'undefined') VitaRouter.handleRoute();
+          VitaHelpers.showToast('Analisis risiko diperbarui!', 'success');
         } else {
-          btn.innerHTML = '<i data-lucide="refresh-cw" style="width:16px;height:16px;"></i>';
-          if(typeof lucide !== 'undefined') lucide.createIcons();
+          btn.innerHTML = '<i data-lucide="refresh-cw" style="width:15px;height:15px;"></i> Hitung Ulang';
+          if (typeof lucide !== 'undefined') lucide.createIcons();
           VitaHelpers.showToast('Layanan kalkulator belum termuat', 'warning');
         }
       }, 1000);
     });
 
-    // Init Radar Chart
     requestAnimationFrame(() => {
-      const rawRisk = VitaStore.get('riskAssessment') || DEMO_RISK;
-      const s = rawRisk.scores || DEMO_RISK.scores;
-      if (window.VitaCharts && window.VitaCharts.createRadar) {
-        VitaCharts.createRadar('risk-radar',
+      const raw = VitaStore.get('riskAssessment') || DEMO_RISK;
+      const s   = raw.scores || DEMO_RISK.scores;
+      if (window.VitaCharts) {
+        VitaCharts.createRadar(
+          'risk-radar',
           ['Diabetes', 'Hipertensi', 'Obesitas', 'Jantung / CVD'],
-          [{
-            label: 'Skor Risiko (%)',
-            data: [s.diabetes, s.hypertension, s.obesity, s.cvd],
-            backgroundColor: 'rgba(46,127,191,0.25)',
-            borderColor: '#2E7FBF',
-            pointBackgroundColor: '#2E7FBF',
-            borderWidth: 2
-          }]
+          [s.diabetes, s.hypertension, s.obesity, s.cvd],
+          '#2E7FBF'
         );
       }
     });

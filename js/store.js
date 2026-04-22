@@ -6,10 +6,13 @@ const VitaStore = (() => {
     todayMeals: [],
     todayNutrition: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium: 0, sugar: 0 },
     riskScores: { diabetes: 0, hypertension: 0, obesity: 0, cvd: 0 },
+    riskAssessment: null,
     esp32IP: null,
     isLoading: false,
     currentPage: 'landing',
     onboardingComplete: false,
+    demoMode: false,
+    waterToday: 0,
     geminiApiKeys: (window.__VITA_ENV__ && window.__VITA_ENV__.GEMINI_API_KEYS) || [],
     geminiApiKeyIndex: 0
   };
@@ -49,8 +52,10 @@ const VitaStore = (() => {
         user: null, profile: null, todayMeals: [],
         todayNutrition: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium: 0, sugar: 0 },
         riskScores: { diabetes: 0, hypertension: 0, obesity: 0, cvd: 0 },
+        riskAssessment: null,
         esp32IP: null, isLoading: false, currentPage: 'landing',
-        onboardingComplete: false, geminiApiKeys: state.geminiApiKeys, geminiApiKeyIndex: 0
+        onboardingComplete: false, demoMode: false, waterToday: 0,
+        geminiApiKeys: state.geminiApiKeys, geminiApiKeyIndex: 0
       };
       state[key] = defaults[key] !== undefined ? defaults[key] : state[key];
     });

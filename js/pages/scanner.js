@@ -10,13 +10,13 @@ const ScannerPage = (() => {
       nutrition:{ calories:330, protein:8,  carbs:50, fat:11, fiber:2,   sodium:850, sugar:4 } },
   ];
 
-  let scanState = 'idle'; // idle | scanning | result | saving
+  let scanState = 'idle'; // idle | loading | result
   let currentResult = null;
-  let capturedImageUrl = null;
   let selectedDevice = null;
   let supabaseInterval = null;
   let lastCaptureId = null;
   let pendingAnalysisBlob = null;
+  let rtdbRef = null;
 
   function topbar() {
     const p = VitaStore.get('profile') || {};
@@ -123,14 +123,15 @@ const ScannerPage = (() => {
               <button class="btn btn-ghost sc-test-btn" id="sc-test-btn" style="font-size:0.78rem;padding:6px 12px;">
                 Connect
               </button>
-            <div id="sc-analysis-actions" style="display:none; gap:10px; margin-top:4px;">
-              <button class="btn btn-outline" id="sc-cancel-capture-btn" style="flex:0 0 auto; padding:10px 16px;">
-                <i data-lucide="x" style="width:18px;height:18px;"></i> Batal
-              </button>
-              <button class="btn btn-primary" id="sc-analyze-btn" style="flex:1;">
-                <i data-lucide="sparkles" style="width:18px;height:18px;"></i>
-                Analisis Gambar
-              </button>
+              <div id="sc-analysis-actions" style="display:none; gap:10px; margin-top:4px; width:100%;">
+                <button class="btn btn-outline" id="sc-cancel-capture-btn" style="flex:0 0 auto; padding:10px 16px;">
+                  <i data-lucide="x" style="width:18px;height:18px;"></i> Batal
+                </button>
+                <button class="btn btn-primary" id="sc-analyze-btn" style="flex:1;">
+                  <i data-lucide="sparkles" style="width:18px;height:18px;"></i>
+                  Analisis Gambar
+                </button>
+              </div>
             </div>
           </div>
 
@@ -375,7 +376,7 @@ const ScannerPage = (() => {
   }
 
   function doAnalyze() {
-    if (scanState === 'scanning') return;
+    if (scanState !== 'idle') return;
 
     if (pendingAnalysisBlob) {
       startAnalysis(pendingAnalysisBlob);
@@ -384,31 +385,63 @@ const ScannerPage = (() => {
 
     const isDemo = VitaStore.get('demoMode');
     if (isDemo) {
-      startAnalysis(null);
+      showState('loading');
+      const steps = ['sc-step-1', 'sc-step-2', 'sc-step-3'];
+      let si = 0;
+      const stepInterval = setInterval(() => {
+        if (si > 0) document.getElementById(steps[si - 1])?.classList.remove('active');
+        if (si < steps.length) { document.getElementById(steps[si])?.classList.add('active'); si++; }
+        else clearInterval(stepInterval);
+      }, 600);
       setTimeout(() => {
-        const food = DEMO_FOODS[Math.floor(Math.random() * DEMO_FOODS.length)];
-        showResult(food);
+        clearInterval(stepInterval);
+        showResult(DEMO_FOODS[Math.floor(Math.random() * DEMO_FOODS.length)]);
       }, 2000);
       return;
     }
 
-    VitaHelpers.showToast('Belum ada gambar yang diambil', 'warning');
+    VitaHelpers.showToast('Belum ada gambar yang diambil. Tunggu foto dari ESP32-CAM.', 'warning');
+  }
+
+  function _pushToStore(result, mealType) {
+    const n = result.nutrition;
+    const newMeal = {
+      id:    Date.now(),
+      name:  result.name,
+      emoji: result.emoji || '🍽️',
+      time:  new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      type:  mealType,
+      cal:   Math.round(n.calories || 0),
+      prot:  parseFloat((n.protein  || 0).toFixed(1)),
+      carb:  parseFloat((n.carbs    || 0).toFixed(1)),
+      fat:   parseFloat((n.fat      || 0).toFixed(1)),
+    };
+
+    const meals = VitaStore.get('todayMeals') || [];
+    meals.push(newMeal);
+    VitaStore.set('todayMeals', meals);
+
+    // Sync todayNutrition
+    const cur = VitaStore.get('todayNutrition') || {};
+    VitaStore.set('todayNutrition', {
+      calories: (cur.calories || 0) + newMeal.cal,
+      protein:  (cur.protein  || 0) + newMeal.prot,
+      carbs:    (cur.carbs    || 0) + newMeal.carb,
+      fat:      (cur.fat      || 0) + newMeal.fat,
+      fiber:    (cur.fiber    || 0) + parseFloat((n.fiber  || 0).toFixed(1)),
+      sodium:   (cur.sodium   || 0) + parseFloat((n.sodium || 0).toFixed(1)),
+      sugar:    (cur.sugar    || 0) + parseFloat((n.sugar  || 0).toFixed(1)),
+    });
   }
 
   async function saveMeal() {
     if (!currentResult) return;
     const mealType = document.getElementById('sc-meal-type')?.value || 'Makan Siang';
-    const mealData = {
-      mealType,
-      timestamp: new Date().toISOString(),
-      source: 'esp32-cam',
-      foods: [{ name: currentResult.name, portion: 1, nutrition: currentResult.nutrition }],
-      totalNutrition: currentResult.nutrition,
-    };
 
     const isDemo = VitaStore.get('demoMode');
     if (isDemo) {
-      VitaHelpers.showToast(`${currentResult.name} disimpan ke ${mealType}! (Demo)`, 'success');
+      _pushToStore(currentResult, mealType);
+      VitaHelpers.showToast(`${currentResult.name} disimpan ke ${mealType}!`, 'success');
       setTimeout(() => { window.location.hash = 'nutrition'; }, 1200);
       return;
     }
@@ -417,15 +450,32 @@ const ScannerPage = (() => {
     if (!user) { VitaHelpers.showToast('Login diperlukan', 'error'); return; }
 
     const btn = document.getElementById('sc-save-btn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-circle" style="width:16px;height:16px;animation:spin 1s linear infinite;"></i> Menyimpan...'; if (typeof lucide !== 'undefined') lucide.createIcons(); }
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader-circle" style="width:16px;height:16px;animation:spin 1s linear infinite;"></i> Menyimpan...';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    const mealData = {
+      mealType,
+      timestamp: new Date().toISOString(),
+      source: 'esp32-cam',
+      foods: [{ name: currentResult.name, portion: 1, nutrition: currentResult.nutrition }],
+      totalNutrition: currentResult.nutrition,
+    };
 
     try {
       await VitaFirestore.saveMeal(user.uid, mealData);
+      _pushToStore(currentResult, mealType);
       VitaHelpers.showToast(`${currentResult.name} disimpan ke ${mealType}!`, 'success');
       setTimeout(() => { window.location.hash = 'nutrition'; }, 1200);
     } catch {
       VitaHelpers.showToast('Gagal menyimpan. Coba lagi.', 'error');
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="save" style="width:16px;height:16px;"></i> Simpan ke Log'; if (typeof lucide !== 'undefined') lucide.createIcons(); }
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="save" style="width:16px;height:16px;"></i> Simpan ke Log';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      }
     }
   }
 
@@ -437,6 +487,12 @@ const ScannerPage = (() => {
 
   function init() {
     if (supabaseInterval) clearInterval(supabaseInterval);
+    // Detach previous RTDB listener jika ada (cegah listener berganda saat navigasi ulang)
+    if (rtdbRef) { rtdbRef.off('value'); rtdbRef = null; }
+    scanState = 'idle';
+    pendingAnalysisBlob = null;
+    selectedDevice = null;
+    lastCaptureId = null;
 
     document.getElementById('sc-menu-btn')?.addEventListener('click', () => {
       document.getElementById('sidebar')?.classList.toggle('open');
@@ -448,7 +504,8 @@ const ScannerPage = (() => {
 
     // Fetch devices from RTDB
     if (typeof firebase !== 'undefined' && firebase.database) {
-      firebase.database().ref('/').on('value', (snap) => {
+      rtdbRef = firebase.database().ref('/');
+      rtdbRef.on('value', (snap) => {
         const val = snap.val();
         const select = document.getElementById('sc-device-select');
         if (!select) return;

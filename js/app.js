@@ -16,13 +16,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (typeof VitaFirestore !== 'undefined') {
           try {
             const profile = await VitaFirestore.getUserProfile(user.uid);
+            const PUBLIC_PAGES = ['', 'login', 'register', 'forgot-password'];
+
             if (profile) {
               VitaStore.set('profile', profile);
               _updateSidebarUser(profile);
 
-              // Jika onboarding belum selesai, arahkan ke onboarding
               if (!profile.onboardingComplete) {
                 if (typeof VitaRouter !== 'undefined') VitaRouter.navigate('onboarding');
+                return;
+              }
+
+              // Onboarding selesai — restore halaman sebelum refresh, atau ke dashboard
+              const currentHash    = window.location.hash.replace('#', '') || '';
+              const savedRedirect  = sessionStorage.getItem('vita_redirect_after_auth');
+              if (savedRedirect) {
+                sessionStorage.removeItem('vita_redirect_after_auth');
+                if (typeof VitaRouter !== 'undefined') VitaRouter.navigate(savedRedirect);
+                return;
+              }
+              if (PUBLIC_PAGES.includes(currentHash)) {
+                if (typeof VitaRouter !== 'undefined') VitaRouter.navigate('dashboard');
                 return;
               }
             } else {

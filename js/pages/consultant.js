@@ -1,12 +1,11 @@
 // VITA — AI Consultant Page
 const ConsultantPage = (() => {
 
-  // Menyimpan riwayat percakapan untuk memberi konteks pada Gemini AI
   let chatHistory = [];
 
   function topbar(name) {
     return `
-    <div class="vita-topbar" style="border-bottom:none; z-index:20;">
+    <div class="vita-topbar" style="border-bottom:none;">
       <div class="vita-topbar-left">
         <button class="vita-menu-btn" id="cons-menu-btn"><i data-lucide="menu"></i></button>
         <div class="topbar-brand">
@@ -23,158 +22,146 @@ const ConsultantPage = (() => {
         </div>
       </div>
       <div class="vita-topbar-right">
-        <button class="vita-icon-btn" onclick="window.location.hash='dashboard'"><i data-lucide="x"></i></button>
+        <button class="vita-icon-btn" onclick="window.location.hash='dashboard'">
+          <i data-lucide="x"></i>
+        </button>
       </div>
     </div>`;
   }
 
   function render() {
-    const p = VitaStore.get('profile') || {};
+    const p    = VitaStore.get('profile') || {};
     const risk = VitaStore.get('riskScores') || { diabetes: 28, hypertension: 42, obesity: 19, cvd: 33 };
-    
     const highestRisk = Object.keys(risk).reduce((a, b) => risk[a] > risk[b] ? a : b, 'diabetes');
-    const riskNames = { diabetes: 'Diabetes', hypertension: 'Hipertensi', obesity: 'Obesitas', cvd: 'Penyakit Jantung' };
+    const riskNames   = { diabetes: 'Diabetes', hypertension: 'Hipertensi', obesity: 'Obesitas', cvd: 'Penyakit Jantung' };
 
-    // Reset riwayat saat halaman dimuat ulang
     chatHistory = [];
 
+    const CHIPS = ['Saran sarapan sehat', 'Cara kurangi sodium?', 'Jelaskan risiko saya'];
+
     return `
-    <div class="dash-bg" style="display:flex;flex-direction:column;height:100vh;overflow:hidden;background:#F8FAFC;">
+    <div class="chat-page-wrap">
       ${topbar(p.name || 'Pengguna')}
 
-      <!-- Context Banner -->
-      <div style="background:var(--primary); color:white; padding:10px 20px; font-size:0.75rem; display:flex; gap:16px; align-items:center; z-index:10;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <i data-lucide="scale" style="width:14px;height:14px;opacity:0.8;"></i> 
-          <span>BMI: <strong>${p.bmi ? p.bmi.toFixed(1) : '24.9'}</strong></span>
+      <!-- Context Bar -->
+      <div class="chat-context-bar">
+        <div class="chat-context-item">
+          <i data-lucide="scale" style="width:13px;height:13px;opacity:0.75;"></i>
+          BMI <strong>${p.bmi ? p.bmi.toFixed(1) : '24.9'}</strong>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <i data-lucide="alert-triangle" style="width:14px;height:14px;opacity:0.8;"></i> 
-          <span>Perhatian: <strong>${riskNames[highestRisk] || '-'}</strong></span>
+        <div class="chat-context-sep"></div>
+        <div class="chat-context-item">
+          <i data-lucide="alert-triangle" style="width:13px;height:13px;opacity:0.75;"></i>
+          Perhatian: <strong>${riskNames[highestRisk] || '—'}</strong>
+        </div>
+        <div class="chat-context-sep"></div>
+        <div class="chat-context-item">
+          <i data-lucide="sparkles" style="width:13px;height:13px;opacity:0.75;"></i>
+          Gemini AI
         </div>
       </div>
 
       <!-- Chat Area -->
-      <div id="chat-area" style="flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:16px;">
-        <!-- Initial Greeting -->
-        <div style="align-self:flex-start; display:flex; gap:10px; max-width:85%; animation:fadeInUp 0.4s ease forwards;">
-          <div style="width:36px; height:36px; border-radius:50%; background:white; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:var(--shadow-sm); border:1px solid var(--border-light);">
-            <i data-lucide="bot" style="width:20px; height:20px; color:var(--primary);"></i>
+      <div id="chat-area" class="chat-area">
+        <div class="chat-bubble-row ai">
+          <div class="chat-avatar ai-avatar">
+            <i data-lucide="bot" style="width:18px;height:18px;color:var(--primary);"></i>
           </div>
-          <div style="background:white; padding:14px 18px; border-radius:16px 16px 16px 4px; font-size:0.875rem; color:var(--text); line-height:1.5; box-shadow:var(--shadow-sm); border:1px solid var(--border-light);">
-            Halo ${p.name || 'Pengguna'}! Saya <strong>VITA AI</strong>. 🤖<br><br>
-            Berdasarkan profil kesehatan Anda, saya bisa merekomendasikan menu makanan, mengevaluasi makanan harian Anda, atau menjelaskan peta risiko metabolisme Anda. Ada yang ingin ditanyakan?
+          <div class="chat-bubble ai-bubble">
+            Halo <strong>${p.name || 'Pengguna'}</strong>! Saya <strong>VITA AI</strong> 🤖<br><br>
+            Saya bisa merekomendasikan menu, mengevaluasi pola makan, atau menjelaskan risiko metabolisme Anda. Ada yang ingin ditanyakan?
           </div>
         </div>
       </div>
 
       <!-- Input Area -->
-      <div style="background:white; padding:16px; border-top:1px solid var(--border-light); z-index:10; box-shadow:0 -4px 12px rgba(0,0,0,0.03);">
-        
-        <!-- Suggestion Chips -->
-        <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; scrollbar-width:none;" id="chat-suggestions">
-          ${['Saran sarapan sehat', 'Cara kurangi asupan sodium?', 'Jelaskan risiko tinggi saya'].map(chip => `
-            <button onclick="ConsultantPage.send('${chip}')" style="white-space:nowrap; padding:8px 14px; border-radius:20px; background:var(--bg-light); border:1px solid var(--border-light); font-size:0.75rem; color:var(--primary); font-weight:600; cursor:pointer; transition:all 0.2s;">
-              ${chip}
-            </button>
+      <div class="chat-input-area">
+        <div class="chat-chips" id="chat-suggestions">
+          ${CHIPS.map(chip => `
+            <button class="chat-chip" onclick="ConsultantPage.send('${chip}')">${chip}</button>
           `).join('')}
         </div>
-
-        <!-- Form Input -->
-        <form id="chat-form" style="display:flex; gap:10px; align-items:center;">
-          <input type="text" id="chat-input" placeholder="Tanya tentang diet & kesehatan..." 
-            style="flex:1; padding:14px 20px; border-radius:24px; border:1.5px solid var(--border-light); outline:none; font-size:0.875rem; background:var(--bg-light); transition:border-color 0.2s;" autocomplete="off">
-          <button type="submit" class="btn btn-primary" style="border-radius:50%; width:48px; height:48px; padding:0; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-            <i data-lucide="send" style="width:18px; height:18px;"></i>
+        <form id="chat-form" class="chat-form">
+          <input type="text" id="chat-input" class="chat-input"
+            placeholder="Tanya tentang diet &amp; kesehatan..." autocomplete="off">
+          <button type="submit" class="chat-send-btn">
+            <i data-lucide="send" style="width:18px;height:18px;"></i>
           </button>
         </form>
       </div>
     </div>`;
   }
 
-  // Parser ringan untuk mengubah Markdown Gemini menjadi HTML
   function parseMarkdown(text) {
-    let formatted = text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
-      .replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, '<em>$1</em>') // Italic
-      .replace(/\n/g, '<br>'); // Baris baru
-
-    // Mengubah format list/bullet points (berawalan - atau *)
-    formatted = formatted.replace(/(?:<br>|^)\s*[-\*]\s+(.*?)(?=(?:<br>|$))/g, '<li style="margin-bottom:4px;">$1</li>');
-    formatted = formatted.replace(/(<li.*?>.*?<\/li>)+/g, '<ul style="margin:8px 0;padding-left:24px;">$&</ul>');
-
-    return formatted;
+    let f = text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+      .replace(/\n/g, '<br>');
+    f = f.replace(/(?:<br>|^)\s*[-*]\s+(.*?)(?=(?:<br>|$))/g, '<li style="margin-bottom:4px;">$1</li>');
+    f = f.replace(/(<li.*?>.*?<\/li>)+/g, '<ul style="margin:8px 0;padding-left:20px;">$&</ul>');
+    return f;
   }
 
   async function send(textStr) {
-    const input = document.getElementById('chat-input');
-    const area = document.getElementById('chat-area');
+    const input     = document.getElementById('chat-input');
+    const area      = document.getElementById('chat-area');
     const submitBtn = document.querySelector('#chat-form button');
     if (!input || !area) return;
 
     const msg = typeof textStr === 'string' ? textStr : input.value.trim();
     if (!msg) return;
 
-    input.value = '';
+    input.value   = '';
     input.disabled = true;
     if (submitBtn) submitBtn.disabled = true;
-    document.getElementById('chat-suggestions').style.display = 'none'; // Sembunyikan chip setelah chat pertama
 
-    // Simpan ke riwayat lokal
+    const suggestEl = document.getElementById('chat-suggestions');
+    if (suggestEl) suggestEl.style.display = 'none';
+
     chatHistory.push(`Pengguna: ${msg}`);
 
-    // 1. Render User message
+    // User bubble
     area.innerHTML += `
-      <div style="align-self:flex-end; display:flex; gap:10px; max-width:85%; flex-direction:row-reverse; animation:fadeInUp 0.3s ease forwards;">
-        <div style="background:var(--primary); color:white; padding:12px 18px; border-radius:16px 16px 4px 16px; font-size:0.875rem; line-height:1.5; box-shadow:var(--shadow-sm);">
-          ${msg}
-        </div>
+      <div class="chat-bubble-row user">
+        <div class="chat-bubble user-bubble">${msg}</div>
       </div>`;
     area.scrollTop = area.scrollHeight;
 
-    // 2. Render Loading AI state
+    // AI loading
     const loaderId = 'ai-load-' + Date.now();
     area.innerHTML += `
-      <div id="${loaderId}" style="align-self:flex-start; display:flex; gap:10px; max-width:85%; animation:fadeInUp 0.3s ease forwards;">
-        <div style="width:36px; height:36px; border-radius:50%; background:var(--primary-bg); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-          <i data-lucide="bot" style="width:20px; height:20px; color:var(--primary);"></i>
+      <div id="${loaderId}" class="chat-bubble-row ai">
+        <div class="chat-avatar ai-avatar">
+          <i data-lucide="bot" style="width:18px;height:18px;color:var(--primary);"></i>
         </div>
-        <div style="background:white; padding:14px 18px; border-radius:16px 16px 16px 4px; font-size:0.875rem; border:1px solid var(--border-light); display:flex; align-items:center; gap:6px;">
-          Sedang berpikir...
+        <div class="chat-bubble ai-bubble chat-typing">
+          <span></span><span></span><span></span>
         </div>
       </div>`;
-    if(typeof lucide !== 'undefined') lucide.createIcons();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     area.scrollTop = area.scrollHeight;
 
-    // 3. Fetch from API
     try {
-      // Gabungkan riwayat percakapan lalu kirim sebagai prompt
-      const promptContext = chatHistory.join('\n\n');
-      const response = await window.VitaAI.ask(promptContext);
-      
+      const response = await window.VitaAI.ask(chatHistory.join('\n\n'));
       chatHistory.push(`VITA AI: ${response}`);
       document.getElementById(loaderId)?.remove();
-      
+
       area.innerHTML += `
-        <div style="align-self:flex-start; display:flex; gap:10px; max-width:85%; animation:fadeInUp 0.3s ease forwards;">
-          <div style="width:36px; height:36px; border-radius:50%; background:var(--primary-bg); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-            <i data-lucide="sparkles" style="width:20px; height:20px; color:var(--primary);"></i>
+        <div class="chat-bubble-row ai">
+          <div class="chat-avatar ai-avatar">
+            <i data-lucide="sparkles" style="width:18px;height:18px;color:var(--primary);"></i>
           </div>
-          <div style="background:white; padding:14px 18px; border-radius:16px 16px 16px 4px; font-size:0.875rem; color:var(--text); line-height:1.6; box-shadow:var(--shadow-sm); border:1px solid var(--border-light);">
-            ${parseMarkdown(response)}
-          </div>
+          <div class="chat-bubble ai-bubble">${parseMarkdown(response)}</div>
         </div>`;
-    } catch (e) {
+    } catch {
       document.getElementById(loaderId)?.remove();
       VitaHelpers.showToast('Gagal memuat balasan AI.', 'error');
     }
-    
-    // Mengaktifkan kembali input
+
     input.disabled = false;
     if (submitBtn) submitBtn.disabled = false;
     setTimeout(() => input.focus(), 100);
-
-    if(typeof lucide !== 'undefined') lucide.createIcons();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     area.scrollTop = area.scrollHeight;
   }
 
